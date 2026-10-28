@@ -32,6 +32,38 @@ export function normalizeConfig(input) {
     fail(
       "scheduled mode requires anchor.at (HH:MM) and anchor.edge (start/end)",
     );
+  if (input.translations !== undefined) {
+    const translations = input.translations;
+    if (
+      !translations ||
+      typeof translations !== "object" ||
+      Array.isArray(translations)
+    )
+      fail("translations must be an object");
+    for (const [key, value] of Object.entries(translations)) {
+      if (
+        !["language", "now", "ready_to_start", "starts_in"].includes(key) ||
+        typeof value !== "string"
+      )
+        fail("unsupported translation setting or non-text value");
+    }
+    if (translations.language !== undefined) {
+      try {
+        if (
+          !translations.language ||
+          Intl.getCanonicalLocales(translations.language).length !== 1
+        )
+          fail("invalid translation language");
+      } catch {
+        fail("invalid translation language");
+      }
+    }
+    if (
+      translations.starts_in !== undefined &&
+      !translations.starts_in.includes("{duration}")
+    )
+      fail("translations.starts_in must include {duration}");
+  }
   if (input.now_label !== undefined && typeof input.now_label !== "string")
     fail("now_label must be text");
   if (input.title !== undefined && typeof input.title !== "string")
@@ -50,6 +82,16 @@ export function normalizeConfig(input) {
     (!Number.isFinite(input.height) || input.height < 80 || input.height > 400)
   )
     fail("height must be 80–400");
+  for (const key of ["padding_before", "padding_after"]) {
+    if (
+      input[key] !== undefined &&
+      (typeof input[key] !== "number" ||
+        !Number.isFinite(input[key]) ||
+        input[key] < 0 ||
+        input[key] > 1440)
+    )
+      fail(`${key} must be 0–1440 minutes`);
+  }
   const ids = new Set();
   const reserved = new Set(
     input.phases.map((p) => p?.id).filter((id) => id !== undefined),
@@ -65,11 +107,6 @@ export function normalizeConfig(input) {
     if (typeof id !== "string" || !id || ids.has(id))
       fail("phase IDs must be unique text");
     ids.add(id);
-    if (
-      p.icon !== undefined &&
-      (typeof p.icon !== "string" || !/^mdi:[a-z0-9-]+$/.test(p.icon))
-    )
-      fail("icons must use mdi:name");
     if (
       p.color !== undefined &&
       (typeof p.color !== "string" || !/^#[a-fA-F0-9]{6}$/.test(p.color))
@@ -90,6 +127,8 @@ export function normalizeConfig(input) {
     height: input.height ?? (input.minimalist ? 80 : 120),
     minimalist: input.minimalist ?? false,
     show_now: input.show_now ?? true,
+    padding_before: input.padding_before ?? 0,
+    padding_after: input.padding_after ?? 0,
     show_remaining: input.show_remaining ?? true,
     phases,
   };
@@ -103,23 +142,49 @@ function parseDuration(value) {
     fail("duration must be positive and shorter than 24 hours");
   return milliseconds;
 }
+function scheduledOccurrences(config, now, zone) {
+  const timezone = config.timezone ?? zone;
+  const date = Temporal.Instant.fromEpochMilliseconds(now)
+    .toZonedDateTimeISO(timezone)
+    .toPlainDate();
+  const duration = config.phases.reduce((sum, p) => sum + p.milliseconds, 0);
+  return [-1, 0, 1, 2].map((days) => {
+    const anchor = date.add({ days }).toZonedDateTime({
+      timeZone: timezone,
+      plainTime: config.anchor.at,
+    }).epochMilliseconds;
+    const start = config.anchor.edge === "end" ? anchor - duration : anchor;
+    return { start, end: start + duration };
+  });
+}
+export function nextScheduledStart(config, now, zone) {
+  return Math.min(
+    ...scheduledOccurrences(config, now, zone)
+      .filter((s) => s.start > now)
+      .map((s) => s.start),
+  );
+}
+export function timelineWindow(config, sequence) {
+  const start = sequence.start - (config.padding_before ?? 0) * 60000;
+  const end = sequence.end + (config.padding_after ?? 0) * 60000;
+  return { start, end, duration: end - start };
+}
 export function resolveSequence(config, now, zone, startedAt) {
   if (config.mode === "scheduled") {
-    const timezone = config.timezone ?? zone;
-    const date = Temporal.Instant.fromEpochMilliseconds(now)
-      .toZonedDateTimeISO(timezone)
-      .toPlainDate();
-    const duration = config.phases.reduce((sum, p) => sum + p.milliseconds, 0);
-    const occurrences = [-1, 0, 1].map((days) => {
-      const anchor = date.add({ days }).toZonedDateTime({
-        timeZone: timezone,
-        plainTime: config.anchor.at,
-      }).epochMilliseconds;
-      const start = config.anchor.edge === "end" ? anchor - duration : anchor;
-      return { start, end: start + duration };
-    });
+    const occurrences = scheduledOccurrences(config, now, zone);
+    const padded = occurrences
+      .filter((s) => {
+        const window = timelineWindow(config, s);
+        return now >= window.start && now < window.end;
+      })
+      .sort(
+        (a, b) =>
+          Math.max(a.start - now, now - a.end, 0) -
+            Math.max(b.start - now, now - b.end, 0) || b.start - a.start,
+      );
     startedAt = (
       [...occurrences].reverse().find((s) => now >= s.start && now < s.end) ??
+      padded[0] ??
       occurrences[1]
     ).start;
   }

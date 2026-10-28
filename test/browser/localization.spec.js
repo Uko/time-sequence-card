@@ -88,11 +88,13 @@ test("editor can set and clear the marker wording override", async ({
     document.querySelector("main").replaceChildren(editor);
   });
   const field = page.getByLabel(
-    "Now label (blank uses Home Assistant language)",
+    "Now label (blank uses selected language)",
   );
   await field.fill("Зараз");
   await field.dispatchEvent("change");
-  expect(await page.evaluate(() => window.changed.now_label)).toBe("Зараз");
+  expect(await page.evaluate(() => window.changed.translations.now)).toBe(
+    "Зараз",
+  );
   await field.fill("");
   await field.dispatchEvent("change");
   expect(

@@ -36,21 +36,18 @@ session_id: presentation
 phases:
   - label: Laptop setup
     duration: "00:01:00"
-    icon: mdi:laptop
     color: "#E6AE47"
   - label: Talk
     duration: "00:10:00"
-    icon: mdi:presentation
     color: "#49A9BC"
   - label: Questions
     duration: "00:03:00"
-    icon: mdi:comment-question
     color: "#8EAF67"
 ```
 
 The optional `session_id` enables reload recovery and synchronisation across tabs on the **same browser origin** using local storage. Use a distinct ID per independent sequence. Devices, browser profiles, and different HA URLs do not share this storage. Without an ID, the session is in-memory only; a full page reload resets it. Removing/reconnecting the same card element retains its in-memory start.
 
-Only the start timestamp and a phase ID/duration signature are stored. A change to phase IDs, ordering or durations invalidates a saved session; do not edit timing during a run. Changing labels or colours leaves the fixed timings unchanged. Unavailable browser storage produces a visible warning rather than breaking Start. Reset removes the saved session. A finished session remains finished until Reset; it never starts again automatically.
+Only the start timestamp and a phase ID/duration signature are stored. A change to phase IDs, ordering or durations invalidates a saved session; do not edit timing during a run. Changing labels or colours leaves the fixed timings unchanged. Unavailable browser storage produces a visible warning rather than breaking Start. Reset removes the saved session. After a run finishes, the status returns to **Ready to start** and Start becomes available for a new run; the completed session remains stored until Start or Reset. It never restarts automatically.
 
 ## Daily routine ending at a deadline
 
@@ -64,16 +61,12 @@ anchor:
 phases:
   - label: Breakfast
     duration: "00:15:00"
-    icon: mdi:food
   - label: Brush teeth
     duration: "00:05:00"
-    icon: mdi:toothbrush
   - label: Get dressed
     duration: "00:10:00"
-    icon: mdi:tshirt-crew
   - label: Leave
     duration: "00:10:00"
-    icon: mdi:bag-personal
   - label: Buffer
     duration: "00:05:00"
     color: "#DC7272"
@@ -105,37 +98,60 @@ card:
 
 ## Visual editor and display options
 
-The native card editor supports title, mode, anchor, minimalist mode, phase labels/durations/icons/colours, reordering, adding/removing phases, and a read-only calculated-time preview. The preview never starts a live session.
+The native card editor supports title, mode, anchor, minimalist mode, phase labels/durations/colours, reordering, adding/removing phases, and a read-only calculated-time preview. It follows Home Assistant's field colours and selected light/dark mode, including native form controls. The preview never starts a live session.
 
 Optional top-level settings:
 
 - `timezone`: IANA time-zone name; default is the Home Assistant configured time zone, falling back to the browser only before HA provides its configuration.
 - `minimalist`: focus on the timeline and a full-width phase name above it; hides the title, mode badge, schedule summary and countdown row. Default `false`. Manual Start/Reset remain available as compact controls.
 - `height`: timeline area height (bar plus time labels), 80–400 pixels; defaults to 120, or 80 with `minimalist: true`. The bar fills the available area rather than being capped at a fixed height.
-- `show_now`: show the active current-time marker; default `true`.
-- `now_label`: optional custom text before the current time, also available in the visual editor. Omit it to use Home Assistant's selected interface language. An explicit empty string in YAML shows only the time.
-- `show_remaining`: show countdowns; default `true`.
+- `show_now`: show the current-time marker during the sequence and any configured timeline padding; default `true`.
+- `padding_before` / `padding_after`: extra visible time before the first phase and after the final phase, in minutes; both default to `0`. Accept finite numbers from 0 to 1440, including fractions. Available in the visual editor. These are display-only margins, not phases or delays.
+- `translations`: optional language and text overrides, described below and grouped separately in the visual editor.
+- `now_label`: legacy override for the current-time word; still supported. Prefer `translations.now` for new configurations.
+- `show_remaining`: show active-phase countdowns; default `true`. The idle next-start countdown remains part of the status in both display modes.
 - `session_id`: manual browser-local persistence, described above.
 
-Each phase requires `label` and `duration`. Optional `id` must be unique, `icon` uses `mdi:name`, and `color` uses `#RRGGBB`. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
+Each phase requires `label` and `duration`. Optional `id` must be unique, and `color` uses `#RRGGBB`. Legacy `icon` fields are ignored; removing them from existing YAML is optional. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
 
-### Current-time wording
-
-The default marker word follows Home Assistant's interface language: English **Now**, German **Jetzt**, Ukrainian **Зараз**, French **Maintenant**, Spanish **Ahora**, or Polish **Teraz**. Regional language variants use the same translation; unsupported languages fall back to English. A language change takes effect without restarting the sequence.
-
-Override the marker wording independently of the interface language:
+### Timeline padding
 
 ```yaml
-now_label: "Right now"
+padding_before: 5
+padding_after: 5
 ```
 
-Custom text retains its spelling and case and is rendered as plain text, never HTML. Long wording is ellipsized on narrow cards while the clock stays visible. Clearing the visual editor's override restores automatic language selection. In YAML, `now_label: ""` deliberately hides the word but keeps the current time. Neither wording changes nor language changes alter the sequence timings or manual session.
+The neutral margins share the timeline's time scale with the coloured phases. The cursor and current-time label can move through those margins, while phase-boundary labels still show the actual event times. Padding never changes phase durations, anchors, deadlines, next-start countdowns or stored manual starts. `show_now: false` also hides the cursor in the margins.
+
+For daily schedules, padding can cross midnight. An actually active sequence takes priority; when only padded windows overlap, the nearest real sequence is shown. The cursor is visible from the padded start up to, but not including, the padded end.
+
+Manual mode has no known start until Start is pressed, so its leading margin is a visual preview rather than a pre-start countdown. Pressing Start begins the first phase immediately; the cursor can continue through trailing padding after completion. Adjusting padding does not reset a running manual session.
+
+### Idle status and translations
+
+Outside an active scheduled sequence, the status shows **Start in 18h** (for example), counting down to the next daily sequence start. This also works after today's finish, in minimalist mode, and with `show_remaining: false`. The countdown uses rounded-up hours, then minutes below one hour, then seconds below one minute. It is calculated from actual timestamps in the configured time zone, including overnight and DST changes. It refers only to the card's daily schedule; external HA visibility/holiday rules are not interpreted.
+
+An idle or completed manual sequence shows **Ready to start**. Start begins a fresh run after completion without requiring Reset; it remains disabled while a run is active. No automatic restart occurs.
+
+The current-time word, readiness message and start countdown automatically follow Home Assistant's interface language. Built-in translations cover English, German, Ukrainian, French, Spanish and Polish, including regional language tags; unsupported languages fall back to English. Override the language or individual messages in one optional block:
+
+```yaml
+translations:
+  language: en
+  now: "Right now"
+  ready_to_start: "Ready when you are"
+  starts_in: "Start in {duration}"
+```
+
+All keys are optional. Omit `language` to follow HA. `starts_in` must include the literal `{duration}` placeholder; the card inserts a localized compact duration. Custom strings are plain text, never HTML. Changing language or wording does not reset timings or a running manual session. Other controls and editor labels currently remain English.
+
+An explicit `translations.now: ""` in YAML hides the word but keeps the clock. The legacy `now_label` setting still works; `translations.now` takes precedence when both are present. The editor groups these settings under **Translations**, pre-fills a legacy override, and writes the grouped form when that field is edited. Clearing an override in the editor restores the translated default. Long current-time wording is ellipsized while keeping the clock visible.
 
 ### Timeline-first layout
 
-There is no permanent duplicate legend in either mode. Short phases keep their proportional width; tap, hover or keyboard-focus any segment for its full name, exact boundaries, duration and optional icon. Tap pins the details open; tap the segment again, use the close button, press Escape or tap outside the card to dismiss. Details overlay the page rather than reserving space below the timeline.
+There is no permanent duplicate legend in either mode. Short phases keep their proportional width; tap, hover or keyboard-focus any segment for its full name, exact boundaries and duration. Tap pins the details open; tap the segment again, use the close button, press Escape or tap outside the card to dismiss. Details overlay the page rather than reserving space below the timeline.
 
-In minimalist mode, the current action name is centered above the NOW cursor, opposite the time label below the bar. It tracks the cursor as time advances and clamps inside the available space near either edge. Long names can wrap instead of being constrained to their phase's segment. Inspecting another phase leaves this current-action label attached to NOW; the inspected phase's name appears in its details overlay. In full mode, the status row can show the inspected phase name instead. The active phase label is omitted inside its segment to avoid duplication.
+In minimalist mode, the current action name is centered above the NOW cursor, opposite the time label below the bar. It tracks the cursor as time advances and clamps inside the available space near either edge. Long names can wrap instead of being constrained to their phase's segment. In both modes, inspecting another phase changes only its details overlay: the top label and countdown continue to show the current action or idle status. This applies to hover, keyboard focus and pinned tap details. The active phase label is omitted inside its segment to avoid duplication.
 
 Manual Start/Reset controls sit at the top right above the bar in both modes. Space is reserved so the action name cannot overlap them; on narrow minimalist cards the controls use a separate right-aligned row above the action label.
 
@@ -147,7 +163,7 @@ For a compact scheduled widget, add this at the top level:
 minimalist: true
 ```
 
-Timing, phase colours and interactions are unchanged by minimalist mode. Completed phases are muted. Home Assistant icons and theme colours are used when available.
+Timing, phase colours and interactions are unchanged by minimalist mode. Completed phases are muted. Home Assistant theme colours are used when available.
 
 ## Dates, clocks and limitations
 
@@ -156,7 +172,7 @@ Timing, phase colours and interactions are unchanged by minimalist mode. Complet
 - DST uses Temporal's compatible resolution: nonexistent local anchors shift forward by the gap; ambiguous anchors use the earlier occurrence. Durations remain real elapsed minutes/seconds, not nominal wall-clock differences.
 - Display state is recomputed from the timestamp every second and immediately on page visibility changes. Sleeping or throttled browsers catch up without accumulating timer drift. Keep the browser clock synchronised.
 - This first version is a **visual timeline**, not a backend automation runner. Closing the page stops rendering, not elapsed time. It does not dispatch HA actions or play sounds. Reliable notifications should remain backend automations; optional frontend audio and reusable multi-schedule presets are follow-up work.
-- The current-time marker has the translations described above. Other controls and editor labels currently use English. Phase labels and custom marker wording can use any language.
+- The current-time marker and idle status have the translations described above. Other controls and editor labels currently use English. Phase labels and custom wording can use any language.
 
 ## Development
 

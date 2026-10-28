@@ -5,7 +5,7 @@
 <script type="module">
 import '/dist/time-sequence-card.js';
 const manual=document.createElement('time-sequence-card');
-manual.setConfig({type:'custom:time-sequence-card',title:'Presentation',mode:'manual',phases:[{label:'Laptop setup',duration:'00:01:00',icon:'mdi:laptop'},{label:'Talk',duration:'00:10:00',icon:'mdi:presentation'},{label:'Questions',duration:'00:03:00',icon:'mdi:comment-question'}]});
+manual.setConfig({type:'custom:time-sequence-card',title:'Presentation',mode:'manual',phases:[{label:'Laptop setup',duration:'00:01:00'},{label:'Talk',duration:'00:10:00'},{label:'Questions',duration:'00:03:00'}]});
 manual.hass={config:{time_zone:'UTC'}};document.querySelector('main').append(manual);
 const routine=document.createElement('time-sequence-card');
 routine.setConfig({type:'custom:time-sequence-card',title:'Morning routine',mode:'scheduled',anchor:{at:'08:25',edge:'end'},phases:[{label:'Breakfast',duration:'00:15:00'},{label:'Brush teeth',duration:'00:05:00'},{label:'Get dressed',duration:'00:10:00'},{label:'Leave',duration:'00:10:00'},{label:'Buffer',duration:'00:05:00'}]});

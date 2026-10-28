@@ -1,6 +1,16 @@
-import { normalizeConfig, resolveSequence, sequenceState } from "./timing.js";
+import {
+  normalizeConfig,
+  resolveSequence,
+  sequenceState,
+  nextScheduledStart,
+  timelineWindow,
+} from "./timing.js";
 import { styles } from "./styles.js";
-import { resolveNowLabel } from "./localization.js";
+import {
+  translate,
+  translationLanguage,
+  formatStartCountdown,
+} from "./localization.js";
 import "./editor.js";
 
 /** Build text safely: config values never become HTML or CSS markup. */
@@ -53,12 +63,11 @@ export class TimeSequenceCard extends HTMLElement {
       title: "Presentation",
       mode: "manual",
       phases: [
-        { label: "Setup", duration: "00:01:00", icon: "mdi:laptop" },
-        { label: "Talk", duration: "00:10:00", icon: "mdi:presentation" },
+        { label: "Setup", duration: "00:01:00" },
+        { label: "Talk", duration: "00:10:00" },
         {
           label: "Questions",
           duration: "00:03:00",
-          icon: "mdi:comment-question",
         },
       ],
     };
@@ -225,6 +234,7 @@ export class TimeSequenceCard extends HTMLElement {
       (sum, p) => sum + p.milliseconds,
       0,
     );
+    const viewport = timelineWindow(this.config, { start: 0, end: total });
     let offset = 0;
     for (const [i, p] of this.config.phases.entries()) {
       const band = element("button", "band");
@@ -251,8 +261,8 @@ export class TimeSequenceCard extends HTMLElement {
         const close = this.detailPinned && this.inspectedIndex === i;
         this.inspectPhase(close ? -1 : i, !close);
       });
-      band.style.left = `${(offset / total) * 100}%`;
-      band.style.width = `${(p.milliseconds / total) * 100}%`;
+      band.style.left = `${((offset - viewport.start) / viewport.duration) * 100}%`;
+      band.style.width = `${(p.milliseconds / viewport.duration) * 100}%`;
       band.style.setProperty("--phase-color", p.color);
       band.append(element("span", "band-label", p.label));
       track.append(band);
@@ -272,7 +282,7 @@ export class TimeSequenceCard extends HTMLElement {
     offset = 0;
     for (let i = 0; i <= this.config.phases.length; i++) {
       const boundary = element("span", "boundary");
-      boundary.style.left = `${(offset / total) * 100}%`;
+      boundary.style.left = `${((offset - viewport.start) / viewport.duration) * 100}%`;
       boundary.dataset.index = String(i);
       axis.append(boundary);
       offset += this.config.phases[i]?.milliseconds ?? 0;
@@ -283,7 +293,6 @@ export class TimeSequenceCard extends HTMLElement {
     detail.hidden = true;
     detail.setAttribute("role", "group");
     detail.setAttribute("aria-label", "Phase details");
-    const detailIcon = element("ha-icon", "detail-icon");
     const detailText = element("div", "detail-text");
     detailText.append(
       element("strong", "detail-name"),
@@ -294,14 +303,22 @@ export class TimeSequenceCard extends HTMLElement {
     close.type = "button";
     close.setAttribute("aria-label", "Close phase details");
     close.addEventListener("click", () => this.inspectPhase(-1));
-    detail.append(detailIcon, detailText, close);
+    detail.append(detailText, close);
     timeline.append(detail);
     const controls = element("div", "controls");
     if (this.config.mode === "manual") {
       const start = element("button", "start", "Start");
       start.addEventListener("click", () => {
-        if (this.startedAt !== null) return;
-        this.startedAt = Date.now();
+        const now = Date.now();
+        if (
+          this.startedAt !== null &&
+          sequenceState(
+            resolveSequence(this.config, now, this.timezone(), this.startedAt),
+            now,
+          ).status !== "finished"
+        )
+          return;
+        this.startedAt = now;
         this.inspectedIndex = -1;
         this.detailPinned = false;
         this.saveSession();
@@ -440,31 +457,36 @@ export class TimeSequenceCard extends HTMLElement {
         hourCycle: "h23",
       }).format(value);
     const status = root.querySelector(".status");
-    let label = "Ready to start",
+    const language = this._hass?.locale?.language ?? "en";
+    let label = translate(this.config, "ready_to_start", language),
       remaining = "";
-    if (state.status === "upcoming") {
-      label = "Starts in";
-      remaining = durationText(display.start - now);
+    if (
+      state.status === "upcoming" ||
+      (state.status === "finished" && this.config.mode === "scheduled")
+    ) {
+      const next =
+        this.config.mode === "scheduled"
+          ? nextScheduledStart(this.config, now, zone)
+          : display.start;
+      label = translate(
+        this.config,
+        "starts_in",
+        language,
+        formatStartCountdown(
+          next - now,
+          translationLanguage(this.config, language),
+        ),
+      );
     }
     if (state.status === "active") {
       label = display.phases[state.index].label;
       remaining = `${durationText(display.phases[state.index].end - now)} left · ${durationText(display.end - now)} total`;
     }
-    if (state.status === "finished") {
-      label = "Finished";
-      remaining = `${durationText(now - display.end)} since finish`;
-    }
     status.classList.toggle(
       "tracking",
       this.config.minimalist && state.status === "active",
     );
-    if (
-      this.inspectedIndex >= 0 &&
-      (!this.config.minimalist || state.status !== "active")
-    ) {
-      label = display.phases[this.inspectedIndex].label;
-      if (this.inspectedIndex !== state.index) remaining = "";
-    }
+
     const labelNode = status.querySelector(".status-label");
     if (labelNode.textContent !== label) labelNode.textContent = label;
     status.querySelector(".remaining").textContent = this.config.show_remaining
@@ -473,11 +495,14 @@ export class TimeSequenceCard extends HTMLElement {
     root.querySelector(".window-label").textContent = sequence
       ? `${time(display.start)} → ${time(display.end)} · ${zone}`
       : `${durationText(display.end - display.start)} total · fixed windows`;
-    const progress =
-      ((now - display.start) / (display.end - display.start)) * 100;
+    const viewport = timelineWindow(this.config, display);
+    const progress = ((now - viewport.start) / viewport.duration) * 100;
     const cursor = /** @type {HTMLElement} */ (root.querySelector(".cursor"));
     cursor.hidden =
-      !sequence || !this.config.show_now || state.status !== "active";
+      !sequence ||
+      !this.config.show_now ||
+      now < viewport.start ||
+      now >= viewport.end;
     cursor.style.left = `${Math.min(100, Math.max(0, progress))}%`;
     root.querySelectorAll(".band").forEach((band, i) => {
       band.classList.toggle("active", state.index === i);
@@ -508,11 +533,6 @@ export class TimeSequenceCard extends HTMLElement {
         root.querySelector(".detail-time").textContent = range;
         root.querySelector(".detail-duration").textContent =
           `Duration ${durationText(p.milliseconds)}`;
-        const icon = /** @type {HTMLElement} */ (
-          root.querySelector(".detail-icon")
-        );
-        icon.hidden = !p.icon;
-        if (p.icon) icon.setAttribute("icon", p.icon);
       }
     });
     const detail = /** @type {HTMLElement} */ (
@@ -524,10 +544,7 @@ export class TimeSequenceCard extends HTMLElement {
       root.querySelector(".now-label")
     );
     nowLabel.hidden = cursor.hidden;
-    const word = resolveNowLabel(
-      this.config.now_label,
-      this._hass?.locale?.language,
-    );
+    const word = translate(this.config, "now", language);
     const wordNode = /** @type {HTMLElement} */ (
       nowLabel.querySelector(".now-word")
     );
@@ -542,7 +559,7 @@ export class TimeSequenceCard extends HTMLElement {
       root.querySelector(".start")
     );
     if (start) {
-      start.disabled = this.startedAt !== null;
+      start.disabled = this.startedAt !== null && state.status !== "finished";
       /** @type {HTMLButtonElement} */ (root.querySelector(".reset")).disabled =
         this.startedAt === null;
     }

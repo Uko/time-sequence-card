@@ -14,6 +14,10 @@ export class TimeSequenceCardEditor extends HTMLElement {
   }
   set hass(value) {
     this._hass = value;
+    const dark = value?.themes?.darkMode;
+    if (typeof dark === "boolean")
+      this.style.colorScheme = dark ? "dark" : "light";
+    else this.style.removeProperty("color-scheme");
     this.preview();
   }
   setConfig(input) {
@@ -74,7 +78,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
     root.replaceChildren();
     const style = el(
       "style",
-      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid #8887;border-radius:6px;background:var(--ha-card-background,#fff);color:inherit;min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
+      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid var(--input-idle-line-color,var(--divider-color,#8887));border-radius:6px;background:var(--input-fill-color,var(--ha-card-background,var(--card-background-color,#fff)));color:var(--input-ink-color,var(--primary-text-color,#222));min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
     );
     root.append(style);
     root.append(
@@ -178,16 +182,37 @@ export class TimeSequenceCardEditor extends HTMLElement {
       },
       "checkbox",
     );
-    this.field(
-      root,
-      "Now label (blank uses Home Assistant language)",
-      this.config.now_label,
-      (v) => {
-        if (v) this.config.now_label = v;
-        else delete this.config.now_label;
-        this.emit();
-      },
+    const translations = el("fieldset");
+    translations.append(el("legend", "Translations"));
+    translations.append(
+      el(
+        "p",
+        "Leave overrides blank for automatic translations. Language defaults to Home Assistant.",
+      ),
     );
+    root.append(translations);
+    for (const [key, label] of [
+      ["language", "Language (blank uses Home Assistant)"],
+      ["now", "Now label (blank uses selected language)"],
+      ["ready_to_start", "Ready to start label"],
+      ["starts_in", "Start countdown (use {duration})"],
+    ]) {
+      this.field(
+        translations,
+        label,
+        this.config.translations?.[key] ??
+          (key === "now" ? this.config.now_label : ""),
+        (value) => {
+          this.config.translations ??= {};
+          if (value) this.config.translations[key] = value;
+          else delete this.config.translations[key];
+          if (key === "now") delete this.config.now_label;
+          if (!Object.keys(this.config.translations).length)
+            delete this.config.translations;
+          this.emit();
+        },
+      );
+    }
     const display = el("div");
     display.className = "grid";
     root.append(display);
@@ -221,6 +246,24 @@ export class TimeSequenceCardEditor extends HTMLElement {
       },
       "checkbox",
     );
+    for (const [key, label] of [
+      ["padding_before", "Padding before (minutes)"],
+      ["padding_after", "Padding after (minutes)"],
+    ]) {
+      const input = this.field(
+        display,
+        label,
+        this.config[key] ?? 0,
+        (value) => {
+          this.config[key] = Number(value);
+          this.emit();
+        },
+        "number",
+      );
+      input.min = "0";
+      input.max = "1440";
+      input.step = "any";
+    }
     for (const [i, p] of (this.config.phases ?? []).entries()) {
       const group = el("fieldset");
       group.append(el("legend", `Phase ${i + 1}`));
@@ -233,11 +276,6 @@ export class TimeSequenceCardEditor extends HTMLElement {
       });
       this.field(grid, `Phase ${i + 1} duration`, p.duration, (v) => {
         p.duration = v;
-        this.emit();
-      });
-      this.field(grid, `Phase ${i + 1} icon`, p.icon, (v) => {
-        if (v) p.icon = v;
-        else delete p.icon;
         this.emit();
       });
       this.field(

@@ -56,7 +56,7 @@ test("manual sequence auto-advances fixed windows, survives a reload and resets"
   await page.clock.fastForward(600000);
   await expect(page.locator(".status")).toContainText("Questions");
   await page.clock.fastForward(180000);
-  await expect(page.locator(".status")).toContainText("Finished");
+  await expect(page.locator(".status")).toContainText("Ready to start");
   await page.getByRole("button", { name: "Reset", exact: true }).click();
   await expect(page.locator(".status")).toContainText("Ready");
 });
