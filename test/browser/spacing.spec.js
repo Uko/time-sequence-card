@@ -41,9 +41,25 @@ test("bottom spacing matches card padding rather than a spare time-axis row", as
             border: Number.parseFloat(style.borderBottomWidth),
             axisHeight: axis.getBoundingClientRect().height,
             labelHeight: labels[0].getBoundingClientRect().height,
+            topExtension:
+              root.querySelector(".track").getBoundingClientRect().top -
+              root.querySelector(".cursor").getBoundingClientRect().top,
+            bottomExtension:
+              root.querySelector(".cursor").getBoundingClientRect().bottom -
+              root.querySelector(".track").getBoundingClientRect().bottom,
+            labelBottom: root
+              .querySelector(".status-label")
+              .getBoundingClientRect().bottom,
+            cursorTop: root.querySelector(".cursor").getBoundingClientRect()
+              .top,
           };
         }, minimalist);
         console.log(JSON.stringify({ width, minimalist, time, ...spacing }));
+        if (time === "12:07:00") {
+          expect(spacing.topExtension).toBeGreaterThan(0);
+          expect(spacing.topExtension).toBeCloseTo(spacing.bottomExtension, 1);
+          expect(spacing.labelBottom).toBeLessThanOrEqual(spacing.cursorTop);
+        }
         expect(spacing.bottomGap).toBeLessThanOrEqual(
           spacing.padding + spacing.border + 1,
         );
