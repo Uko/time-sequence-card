@@ -32,6 +32,8 @@ export function normalizeConfig(input) {
     fail(
       "scheduled mode requires anchor.at (HH:MM) and anchor.edge (start/end)",
     );
+  if (input.now_label !== undefined && typeof input.now_label !== "string")
+    fail("now_label must be text");
   if (input.title !== undefined && typeof input.title !== "string")
     fail("title must be text");
   if (

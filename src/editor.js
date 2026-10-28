@@ -178,6 +178,16 @@ export class TimeSequenceCardEditor extends HTMLElement {
       },
       "checkbox",
     );
+    this.field(
+      root,
+      "Now label (blank uses Home Assistant language)",
+      this.config.now_label,
+      (v) => {
+        if (v) this.config.now_label = v;
+        else delete this.config.now_label;
+        this.emit();
+      },
+    );
     const display = el("div");
     display.className = "grid";
     root.append(display);

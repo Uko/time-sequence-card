@@ -107,10 +107,23 @@ Optional top-level settings:
 - `minimalist`: focus on the timeline and a full-width phase name above it; hides the title, mode badge, schedule summary and countdown row. Default `false`. Manual Start/Reset remain available as compact controls.
 - `height`: timeline area height (bar plus time labels), 80–400 pixels; defaults to 120, or 80 with `minimalist: true`. The bar fills the available area rather than being capped at a fixed height.
 - `show_now`: show the active current-time marker; default `true`.
+- `now_label`: optional custom text before the current time, also available in the visual editor. Omit it to use Home Assistant's selected interface language. An explicit empty string in YAML shows only the time.
 - `show_remaining`: show countdowns; default `true`.
 - `session_id`: manual browser-local persistence, described above.
 
 Each phase requires `label` and `duration`. Optional `id` must be unique, `icon` uses `mdi:name`, and `color` uses `#RRGGBB`. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
+
+### Current-time wording
+
+The default marker word follows Home Assistant's interface language: English **Now**, German **Jetzt**, Ukrainian **Зараз**, French **Maintenant**, Spanish **Ahora**, or Polish **Teraz**. Regional language variants use the same translation; unsupported languages fall back to English. A language change takes effect without restarting the sequence.
+
+Override the marker wording independently of the interface language:
+
+```yaml
+now_label: "Right now"
+```
+
+Custom text retains its spelling and case and is rendered as plain text, never HTML. Long wording is ellipsized on narrow cards while the clock stays visible. Clearing the visual editor's override restores automatic language selection. In YAML, `now_label: ""` deliberately hides the word but keeps the current time. Neither wording changes nor language changes alter the sequence timings or manual session.
 
 ### Timeline-first layout
 
@@ -137,7 +150,7 @@ Timing, phase colours and interactions are unchanged by minimalist mode. Complet
 - DST uses Temporal's compatible resolution: nonexistent local anchors shift forward by the gap; ambiguous anchors use the earlier occurrence. Durations remain real elapsed minutes/seconds, not nominal wall-clock differences.
 - Display state is recomputed from the timestamp every second and immediately on page visibility changes. Sleeping or throttled browsers catch up without accumulating timer drift. Keep the browser clock synchronised.
 - This first version is a **visual timeline**, not a backend automation runner. Closing the page stops rendering, not elapsed time. It does not dispatch HA actions or play sounds. Reliable notifications should remain backend automations; optional frontend audio and reusable multi-schedule presets are follow-up work.
-- The interface currently uses English controls. Phase labels can use any language.
+- The current-time marker has the translations described above. Other controls and editor labels currently use English. Phase labels and custom marker wording can use any language.
 
 ## Development
 

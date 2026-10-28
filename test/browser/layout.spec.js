@@ -82,7 +82,7 @@ test("NOW is below the strip and suppresses colliding ticks at either endpoint a
       window.card.tick();
       window.card.layoutAxis();
     });
-    await expect(page.locator(".now-label")).toContainText("NOW");
+    await expect(page.locator(".now-label")).toContainText("Now");
     const overlap = await page.evaluate(() => {
       const root = window.card.shadowRoot,
         track = root.querySelector(".track").getBoundingClientRect();

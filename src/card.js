@@ -1,5 +1,6 @@
 import { normalizeConfig, resolveSequence, sequenceState } from "./timing.js";
 import { styles } from "./styles.js";
+import { resolveNowLabel } from "./localization.js";
 import "./editor.js";
 
 /** Build text safely: config values never become HTML or CSS markup. */
@@ -261,6 +262,11 @@ export class TimeSequenceCard extends HTMLElement {
     track.append(cursor);
     const axis = element("div", "axis");
     const nowLabel = element("span", "now-label");
+    nowLabel.append(
+      element("span", "now-word"),
+      document.createTextNode(" "),
+      element("span", "now-time"),
+    );
     nowLabel.hidden = true;
     axis.append(nowLabel);
     offset = 0;
@@ -518,7 +524,16 @@ export class TimeSequenceCard extends HTMLElement {
       root.querySelector(".now-label")
     );
     nowLabel.hidden = cursor.hidden;
-    nowLabel.textContent = `NOW ${time(now)}`;
+    const word = resolveNowLabel(
+      this.config.now_label,
+      this._hass?.locale?.language,
+    );
+    const wordNode = /** @type {HTMLElement} */ (
+      nowLabel.querySelector(".now-word")
+    );
+    wordNode.textContent = word;
+    wordNode.hidden = word === "";
+    nowLabel.querySelector(".now-time").textContent = time(now);
     nowLabel.dataset.fraction = String(
       Math.min(1, Math.max(0, progress / 100)),
     );
