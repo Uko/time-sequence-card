@@ -148,6 +148,103 @@ test("axis layout coalesces geometry work and cancels its frame on disconnect", 
   });
   expect(result).toEqual({ same: true, cancelled: true, restarted: true });
 });
+test("minimalist action tracks the NOW cursor above the strip, with safe edge clamping", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-01-01T12:07:00Z"));
+  await mount(page, { minimalist: true });
+  for (const [instant, centered] of [
+    ["12:00:01", false],
+    ["12:07:00", true],
+    ["12:13:59", false],
+  ]) {
+    await page.clock.setFixedTime(new Date(`2026-01-01T${instant}Z`));
+    const geometry = await page.evaluate(() => {
+      window.card.tick();
+      window.card.layoutAxis();
+      const root = window.card.shadowRoot;
+      const label = root.querySelector(".status-label").getBoundingClientRect();
+      const cursor = root.querySelector(".cursor").getBoundingClientRect();
+      const track = root.querySelector(".track").getBoundingClientRect();
+      return {
+        label: {
+          left: label.left,
+          right: label.right,
+          bottom: label.bottom,
+          center: (label.left + label.right) / 2,
+        },
+        cursor: cursor.left,
+        track: { left: track.left, right: track.right, top: track.top },
+      };
+    });
+    expect(geometry.label.bottom).toBeLessThanOrEqual(geometry.track.top);
+    expect(geometry.label.left).toBeGreaterThanOrEqual(geometry.track.left - 1);
+    expect(geometry.label.right).toBeLessThanOrEqual(geometry.track.right + 1);
+    if (centered)
+      expect(Math.abs(geometry.label.center - geometry.cursor)).toBeLessThan(2);
+  }
+});
+test("manual controls sit top-right above the bar without overlapping action labels", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-01-01T12:00:00Z"));
+  for (const width of [1000, 360])
+    for (const minimalist of [false, true]) {
+      await page.setViewportSize({ width, height: 800 });
+      await mount(page, { mode: "manual", minimalist });
+      await page.getByRole("button", { name: "Start", exact: true }).click();
+      for (const offset of [0, 420000, 839000]) {
+        await page.clock.setFixedTime(
+          new Date(Date.parse("2026-01-01T12:00:00Z") + offset),
+        );
+        const geometry = await page.evaluate(() => {
+          window.card.tick();
+          window.card.layoutAxis();
+          const root = window.card.shadowRoot;
+          const controls = root
+              .querySelector(".controls")
+              .getBoundingClientRect(),
+            label = root.querySelector(".status-label").getBoundingClientRect(),
+            track = root.querySelector(".track").getBoundingClientRect();
+          return {
+            controls: {
+              right: controls.right,
+              bottom: controls.bottom,
+              left: controls.left,
+              top: controls.top,
+            },
+            label: {
+              left: label.left,
+              right: label.right,
+              top: label.top,
+              bottom: label.bottom,
+            },
+            track: { right: track.right, top: track.top },
+          };
+        });
+        expect(
+          Math.abs(geometry.controls.right - geometry.track.right),
+        ).toBeLessThan(2);
+        expect(geometry.controls.bottom).toBeLessThanOrEqual(
+          geometry.track.top,
+        );
+        const overlap =
+          geometry.label.left < geometry.controls.right &&
+          geometry.label.right > geometry.controls.left &&
+          geometry.label.top < geometry.controls.bottom &&
+          geometry.label.bottom > geometry.controls.top;
+        expect(overlap).toBe(false);
+      }
+      if (width === 360 && minimalist)
+        await page.screenshot({
+          path: "test-results/manual-minimalist-narrow.png",
+          fullPage: true,
+        });
+      await page.getByRole("button", { name: "Reset", exact: true }).click();
+      await expect(page.locator(".status-label")).toHaveText("Ready to start");
+      await page.clock.setFixedTime(new Date("2026-01-01T12:00:00Z"));
+    }
+});
 test("minimalist is editable and rejects malformed YAML values", async ({
   page,
 }) => {

@@ -189,6 +189,31 @@ test("showcase renders scheduled and manual sequences at kiosk width", async ({
   await page.clock.runFor(32);
   await expect(page.locator(".status").last()).toContainText("Get dressed");
   await page.screenshot({ path: "test-results/showcase.png", fullPage: true });
+  await page.evaluate(() => {
+    const cards = [...document.querySelectorAll("time-sequence-card")];
+    cards[0].remove();
+    cards[1].remove();
+    const scheduledLabel = document.createElement("p");
+    scheduledLabel.textContent = "Scheduled routine · minimalist";
+    cards[2].before(scheduledLabel);
+    const manualLabel = document.createElement("p");
+    manualLabel.textContent = "Manual session · minimalist";
+    document.querySelector("main").append(manualLabel);
+    const manual = document.createElement("time-sequence-card");
+    manual.setConfig({
+      ...customElements.get("time-sequence-card").getStubConfig(),
+      minimalist: true,
+    });
+    manual.hass = cards[2].hass;
+    manual.startedAt = Date.now() - 300000;
+    document.querySelector("main").append(manual);
+    manual.tick();
+  });
+  await page.clock.runFor(32);
+  await page.screenshot({
+    path: "test-results/anchored-layout.png",
+    fullPage: true,
+  });
 });
 test("visual editor edits, reorders and previews derived boundaries without starting a session", async ({
   page,

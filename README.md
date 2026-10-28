@@ -116,7 +116,9 @@ Each phase requires `label` and `duration`. Optional `id` must be unique, `icon`
 
 There is no permanent duplicate legend in either mode. Short phases keep their proportional width; tap, hover or keyboard-focus any segment for its full name, exact boundaries, duration and optional icon. Tap pins the details open; tap the segment again, use the close button, press Escape or tap outside the card to dismiss. Details overlay the page rather than reserving space below the timeline.
 
-The current phase name uses the full width above the bar, not the width of its segment. Inspecting another phase shows that phase's full name above the bar while its details are open. The active phase label is omitted inside its segment to avoid duplication.
+In minimalist mode, the current action name is centered above the NOW cursor, opposite the time label below the bar. It tracks the cursor as time advances and clamps inside the available space near either edge. Long names can wrap instead of being constrained to their phase's segment. Inspecting another phase leaves this current-action label attached to NOW; the inspected phase's name appears in its details overlay. In full mode, the status row can show the inspected phase name instead. The active phase label is omitted inside its segment to avoid duplication.
+
+Manual Start/Reset controls sit at the top right above the bar in both modes. Space is reserved so the action name cannot overlap them; on narrow minimalist cards the controls use a separate right-aligned row above the action label.
 
 The NOW marker and current time sit below the bar. Time ticks automatically yield when they overlap NOW or each other; labels return as space becomes available. The marker label stays inside the card even near either endpoint. Exact boundaries remain available in each phase's details.
 

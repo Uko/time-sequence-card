@@ -296,12 +296,16 @@ export class TimeSequenceCard extends HTMLElement {
       start.addEventListener("click", () => {
         if (this.startedAt !== null) return;
         this.startedAt = Date.now();
+        this.inspectedIndex = -1;
+        this.detailPinned = false;
         this.saveSession();
         this.tick();
       });
       const reset = element("button", "reset", "Reset");
       reset.addEventListener("click", () => {
         this.startedAt = null;
+        this.inspectedIndex = -1;
+        this.detailPinned = false;
         this.saveSession();
         this.tick();
       });
@@ -309,7 +313,10 @@ export class TimeSequenceCard extends HTMLElement {
     }
     const warning = element("div", "warning");
     warning.setAttribute("role", "alert");
-    card.append(header, status, windowLabel, timeline, controls, warning);
+    const topRow = element("div", "top-row");
+    topRow.classList.toggle("has-controls", this.config.mode === "manual");
+    topRow.append(status, controls);
+    card.append(header, topRow, windowLabel, timeline, warning);
     root.append(card);
   }
   inspectPhase(index, pinned = false) {
@@ -346,6 +353,21 @@ export class TimeSequenceCard extends HTMLElement {
         Number(nowLabel.dataset.fraction ?? 0) * box.width,
       ),
     );
+    const status = this.shadowRoot.querySelector(".status");
+    const action = /** @type {HTMLElement} */ (
+      status.querySelector(".status-label")
+    );
+    const statusBox = status.getBoundingClientRect();
+    const actionWidth = action.getBoundingClientRect().width;
+    const actionCenter = Math.min(
+      statusBox.width - actionWidth / 2,
+      Math.max(
+        actionWidth / 2,
+        box.left +
+          Number(nowLabel.dataset.fraction ?? 0) * box.width -
+          statusBox.left,
+      ),
+    );
     const occupied = nowLabel.hidden
       ? []
       : [
@@ -371,6 +393,9 @@ export class TimeSequenceCard extends HTMLElement {
       }
     }
     nowLabel.style.left = `${center}px`;
+    action.style.left = status.classList.contains("tracking")
+      ? `${actionCenter}px`
+      : "";
     labels.forEach((node, i) =>
       node.classList.toggle("collision", !visible.has(i)),
     );
@@ -423,7 +448,14 @@ export class TimeSequenceCard extends HTMLElement {
       label = "Finished";
       remaining = `${durationText(now - display.end)} since finish`;
     }
-    if (this.inspectedIndex >= 0) {
+    status.classList.toggle(
+      "tracking",
+      this.config.minimalist && state.status === "active",
+    );
+    if (
+      this.inspectedIndex >= 0 &&
+      (!this.config.minimalist || state.status !== "active")
+    ) {
       label = display.phases[this.inspectedIndex].label;
       if (this.inspectedIndex !== state.index) remaining = "";
     }
