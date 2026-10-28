@@ -12,6 +12,12 @@ Define each phase's duration once. The card derives the timeline, highlights the
 - Scheduled mode repeats daily. Use Home Assistant's native conditional card/visibility rules for school days, holidays, or any existing routine-active binary sensor. The card does not replace those scheduling rules.
 - Durations are elapsed time in `HH:MM:SS`, from one second to less than 24 hours. The entire sequence must be shorter than 24 hours. Supply 1–50 phases.
 
+## Install through LACS
+
+Add this card's repository URL in LACS, as for any dashboard plugin. The root `lacs.json` declares `"type": "plugin"`; LACS merges it with `hacs.json`, which supplies the display name and `filename: "time-sequence-card.js"`. The built artifact is committed at `dist/time-sequence-card.js`; no build on Home Assistant is required.
+
+LACS installs the repository's default branch, so merge the implementation PR before installing. It publishes and registers the JavaScript module; approve the dashboard reload when offered, then add **Time Sequence Card** from the card picker or use the YAML examples below. Do not also register the manual `/local/` resource for the same card.
+
 ## Install manually
 
 1. Copy **`dist/time-sequence-card.js`** from this repository to your Home Assistant `/config/www/` directory.
