@@ -1,0 +1,22 @@
+{
+  "name": "time-sequence-card",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "tsc --noEmit",
+    "build": "esbuild src/card.js --bundle --minify --format=esm --target=es2022 --outfile=dist/time-sequence-card.js",
+    "test:browser": "playwright test",
+    "verify": "npm run check && npm test && npm run build && npm run test:browser"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "0.5.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "esbuild": "0.25.11",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
+}
