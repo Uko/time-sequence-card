@@ -97,12 +97,14 @@ test("scheduled finish renders boundaries, escapes labels and updates without re
   ).toBe(true);
   await expect(page.locator(".remaining")).toContainText("12:00");
 });
-test("narrow layout keeps short phases accessible through the full legend", async ({
+test("narrow layout keeps short phases accessible through tap details", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await mount(page, { mode: "manual", phases });
-  await expect(page.locator(".legend")).toContainText("Laptop setup");
+  await page.locator(".band").first().click();
+  await expect(page.locator(".detail-name")).toHaveText("Laptop setup");
+  await page.getByRole("button", { name: "Close phase details" }).click();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > innerWidth,
   );
@@ -122,6 +124,7 @@ test("disconnect stops its clock and reconnect catches up without moving windows
     return start;
   });
   expect(await page.evaluate(() => window.card.timer)).toBe(0);
+  expect(await page.evaluate(() => window.card.layoutFrame)).toBe(0);
   await page.clock.fastForward(120000);
   await page.evaluate(() => document.querySelector("main").append(window.card));
   await expect(page.locator(".status")).toContainText("Talk");
@@ -171,6 +174,19 @@ test("showcase renders scheduled and manual sequences at kiosk width", async ({
   await freezeClock(page, "2026-01-01T08:05:00Z");
   await page.goto("/test/preview.html");
   await expect(page.locator("time-sequence-card")).toHaveCount(2);
+  await page.evaluate(() => {
+    const regular = document.querySelectorAll("time-sequence-card")[1];
+    const compact = document.createElement("time-sequence-card");
+    compact.setConfig({
+      ...regular.config,
+      title: "Minimalist routine",
+      minimalist: true,
+      height: 80,
+    });
+    compact.hass = regular.hass;
+    document.querySelector("main").append(compact);
+  });
+  await page.clock.runFor(32);
   await expect(page.locator(".status").last()).toContainText("Get dressed");
   await page.screenshot({ path: "test-results/showcase.png", fullPage: true });
 });

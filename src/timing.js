@@ -40,7 +40,7 @@ export function normalizeConfig(input) {
       !/^[a-zA-Z0-9_-]{1,80}$/.test(input.session_id))
   )
     fail("session_id must be 1–80 letters, digits, underscores or hyphens");
-  for (const key of ["show_remaining", "show_now"])
+  for (const key of ["show_remaining", "show_now", "minimalist"])
     if (input[key] !== undefined && typeof input[key] !== "boolean")
       fail(`${key} must be boolean`);
   if (
@@ -85,7 +85,8 @@ export function normalizeConfig(input) {
   return {
     ...input,
     title: input.title ?? "Time sequence",
-    height: input.height ?? 140,
+    height: input.height ?? (input.minimalist ? 80 : 120),
+    minimalist: input.minimalist ?? false,
     show_now: input.show_now ?? true,
     show_remaining: input.show_remaining ?? true,
     phases,

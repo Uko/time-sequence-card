@@ -28,6 +28,16 @@ export class TimeSequenceCard extends HTMLElement {
     /** @type {number|null} */ this.startedAt = null;
     this.timer = 0;
     this.storageWarning = "";
+    this.inspectedIndex = -1;
+    this.detailPinned = false;
+    this.layoutFrame = 0;
+    this.resizeObserver = new ResizeObserver(() => this.scheduleLayout());
+    this.onKeydown = (event) => {
+      if (event.key === "Escape") this.inspectPhase(-1);
+    };
+    this.onOutside = (event) => {
+      if (!event.composedPath().includes(this)) this.inspectPhase(-1);
+    };
     this.onVisibility = () => this.tick();
     this.onStorage = (event) => {
       if (event.key === this.storageKey()) {
@@ -56,7 +66,7 @@ export class TimeSequenceCard extends HTMLElement {
     return document.createElement("time-sequence-card-editor");
   }
   getCardSize() {
-    return 4 + Math.ceil((this.config?.phases.length ?? 1) / 3);
+    return this.config?.minimalist ? 2 : 4;
   }
   getGridOptions() {
     return { columns: 12, min_columns: 6, rows: "auto" };
@@ -90,6 +100,9 @@ export class TimeSequenceCard extends HTMLElement {
   connectedCallback() {
     document.addEventListener("visibilitychange", this.onVisibility);
     window.addEventListener("storage", this.onStorage);
+    document.addEventListener("keydown", this.onKeydown);
+    document.addEventListener("pointerdown", this.onOutside);
+    this.resizeObserver.observe(this);
     if (this.config) {
       this.readSession();
       this.tick();
@@ -100,6 +113,11 @@ export class TimeSequenceCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this.timer);
     this.timer = 0;
+    cancelAnimationFrame(this.layoutFrame);
+    this.layoutFrame = 0;
+    this.resizeObserver.disconnect();
+    document.removeEventListener("keydown", this.onKeydown);
+    document.removeEventListener("pointerdown", this.onOutside);
     document.removeEventListener("visibilitychange", this.onVisibility);
     window.removeEventListener("storage", this.onStorage);
   }
@@ -163,11 +181,23 @@ export class TimeSequenceCard extends HTMLElement {
   }
   render() {
     const root = this.shadowRoot;
+    cancelAnimationFrame(this.layoutFrame);
+    this.layoutFrame = 0;
+    this.inspectedIndex = -1;
+    this.detailPinned = false;
     root.replaceChildren();
     const style = element("style");
     style.textContent = styles;
     root.append(style);
     const card = element("ha-card");
+    card.classList.toggle("minimalist", this.config.minimalist);
+    card.addEventListener("pointerleave", () => {
+      if (
+        !this.detailPinned &&
+        !this.shadowRoot.activeElement?.classList.contains("band")
+      )
+        this.inspectPhase(-1);
+    });
     const header = element("header");
     header.append(element("h2", "", this.config.title));
     header.append(
@@ -184,10 +214,10 @@ export class TimeSequenceCard extends HTMLElement {
     const windowLabel = element("div", "window-label");
     const timeline = element("div", "timeline");
     timeline.style.height = `${this.config.height}px`;
-    timeline.setAttribute("role", "img");
+    timeline.setAttribute("role", "group");
     timeline.setAttribute(
       "aria-label",
-      "Phase durations; details listed below",
+      "Phase timeline; tap or focus a phase for details",
     );
     const track = element("div", "track");
     const total = this.config.phases.reduce(
@@ -195,8 +225,31 @@ export class TimeSequenceCard extends HTMLElement {
       0,
     );
     let offset = 0;
-    for (const p of this.config.phases) {
-      const band = element("div", "band");
+    for (const [i, p] of this.config.phases.entries()) {
+      const band = element("button", "band");
+      band.type = "button";
+      band.setAttribute("aria-controls", "phase-detail");
+      band.setAttribute("aria-expanded", "false");
+      band.addEventListener("pointerenter", (e) => {
+        if (e.pointerType === "mouse" && !this.detailPinned)
+          this.inspectPhase(i);
+      });
+      band.addEventListener("focus", () => {
+        if (!this.detailPinned) this.inspectPhase(i);
+      });
+      band.addEventListener("blur", (e) => {
+        if (
+          !this.detailPinned &&
+          !this.shadowRoot
+            .querySelector(".phase-detail")
+            ?.contains(e.relatedTarget)
+        )
+          this.inspectPhase(-1);
+      });
+      band.addEventListener("click", () => {
+        const close = this.detailPinned && this.inspectedIndex === i;
+        this.inspectPhase(close ? -1 : i, !close);
+      });
       band.style.left = `${(offset / total) * 100}%`;
       band.style.width = `${(p.milliseconds / total) * 100}%`;
       band.style.setProperty("--phase-color", p.color);
@@ -205,9 +258,11 @@ export class TimeSequenceCard extends HTMLElement {
       offset += p.milliseconds;
     }
     const cursor = element("div", "cursor");
-    cursor.append(element("span", "", "NOW"));
     track.append(cursor);
     const axis = element("div", "axis");
+    const nowLabel = element("span", "now-label");
+    nowLabel.hidden = true;
+    axis.append(nowLabel);
     offset = 0;
     for (let i = 0; i <= this.config.phases.length; i++) {
       const boundary = element("span", "boundary");
@@ -217,24 +272,24 @@ export class TimeSequenceCard extends HTMLElement {
       offset += this.config.phases[i]?.milliseconds ?? 0;
     }
     timeline.append(track, axis);
-    const legend = element("ol", "legend");
-    for (const [i, p] of this.config.phases.entries()) {
-      const row = element("li", "phase");
-      row.style.setProperty("--phase-color", p.color);
-      row.append(element("span", "number", String(i + 1)));
-      if (p.icon) {
-        const icon = element("ha-icon");
-        icon.setAttribute("icon", p.icon);
-        row.append(icon);
-      }
-      const label = element("span", "phase-name", p.label);
-      label.append(element("span", "phase-time"));
-      row.append(label);
-      row.append(
-        element("span", "phase-duration", durationText(p.milliseconds)),
-      );
-      legend.append(row);
-    }
+    const detail = element("div", "phase-detail");
+    detail.id = "phase-detail";
+    detail.hidden = true;
+    detail.setAttribute("role", "group");
+    detail.setAttribute("aria-label", "Phase details");
+    const detailIcon = element("ha-icon", "detail-icon");
+    const detailText = element("div", "detail-text");
+    detailText.append(
+      element("strong", "detail-name"),
+      element("span", "detail-time"),
+      element("span", "detail-duration"),
+    );
+    const close = element("button", "detail-close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", "Close phase details");
+    close.addEventListener("click", () => this.inspectPhase(-1));
+    detail.append(detailIcon, detailText, close);
+    timeline.append(detail);
     const controls = element("div", "controls");
     if (this.config.mode === "manual") {
       const start = element("button", "start", "Start");
@@ -254,16 +309,71 @@ export class TimeSequenceCard extends HTMLElement {
     }
     const warning = element("div", "warning");
     warning.setAttribute("role", "alert");
-    card.append(
-      header,
-      status,
-      windowLabel,
-      timeline,
-      legend,
-      controls,
-      warning,
-    );
+    card.append(header, status, windowLabel, timeline, controls, warning);
     root.append(card);
+  }
+  inspectPhase(index, pinned = false) {
+    if (this.inspectedIndex === index && this.detailPinned === pinned) return;
+    this.inspectedIndex = index;
+    this.detailPinned = pinned;
+    this.tick();
+  }
+  scheduleLayout() {
+    if (this.layoutFrame || !this.isConnected) return;
+    this.layoutFrame = requestAnimationFrame(() => {
+      this.layoutFrame = 0;
+      this.layoutAxis();
+    });
+  }
+  layoutAxis() {
+    const axis = this.shadowRoot.querySelector(".axis");
+    if (!axis) return;
+    const box = axis.getBoundingClientRect();
+    if (!box.width) return;
+    const nowLabel = /** @type {HTMLElement} */ (
+      axis.querySelector(".now-label")
+    );
+    const labels = [...axis.querySelectorAll(".boundary")];
+    // Read all geometry before changing visibility, once per animation frame.
+    const rectangles = labels.map((node) => node.getBoundingClientRect());
+    const nowWidth = nowLabel.hidden
+      ? 0
+      : nowLabel.getBoundingClientRect().width;
+    const center = Math.min(
+      box.width - nowWidth / 2,
+      Math.max(
+        nowWidth / 2,
+        Number(nowLabel.dataset.fraction ?? 0) * box.width,
+      ),
+    );
+    const occupied = nowLabel.hidden
+      ? []
+      : [
+          {
+            left: box.left + center - nowWidth / 2,
+            right: box.left + center + nowWidth / 2,
+          },
+        ];
+    const visible = new Set();
+    for (const index of [
+      0,
+      labels.length - 1,
+      ...labels.map((_, i) => i).slice(1, -1),
+    ]) {
+      const rect = rectangles[index];
+      if (
+        !occupied.some(
+          (other) => rect.left < other.right + 6 && rect.right > other.left - 6,
+        )
+      ) {
+        visible.add(index);
+        occupied.push(rect);
+      }
+    }
+    nowLabel.style.left = `${center}px`;
+    labels.forEach((node, i) =>
+      node.classList.toggle("collision", !visible.has(i)),
+    );
   }
   tick() {
     if (!this.config || !this.shadowRoot.querySelector(".status")) return;
@@ -313,6 +423,10 @@ export class TimeSequenceCard extends HTMLElement {
       label = "Finished";
       remaining = `${durationText(now - display.end)} since finish`;
     }
+    if (this.inspectedIndex >= 0) {
+      label = display.phases[this.inspectedIndex].label;
+      if (this.inspectedIndex !== state.index) remaining = "";
+    }
     const labelNode = status.querySelector(".status-label");
     if (labelNode.textContent !== label) labelNode.textContent = label;
     status.querySelector(".remaining").textContent = this.config.show_remaining
@@ -338,32 +452,45 @@ export class TimeSequenceCard extends HTMLElement {
       const value =
         i < display.phases.length ? display.phases[i].start : display.end;
       boundary.textContent = sequence ? time(value) : `+${durationText(value)}`;
-      // Always retain endpoints; dense intermediate labels remain in the legend.
-      const fraction = (value - display.start) / (display.end - display.start);
-      boundary.classList.toggle(
-        "intermediate",
-        i > 0 && i < display.phases.length,
-      );
-      boundary.classList.toggle(
-        "near-edge",
-        i > 0 &&
-          i < display.phases.length &&
-          (fraction < 0.12 || fraction > 0.88),
-      );
     });
-    root.querySelectorAll(".phase").forEach((row, i) => {
-      row.classList.toggle("active", state.index === i);
-      row.classList.toggle(
-        "complete",
-        !!sequence && now >= display.phases[i].end,
-      );
-      if (state.index === i) row.setAttribute("aria-current", "step");
-      else row.removeAttribute("aria-current");
+    root.querySelectorAll(".band").forEach((band, i) => {
       const p = display.phases[i];
-      row.querySelector(".phase-time").textContent = sequence
+      const range = sequence
         ? `${time(p.start)} – ${time(p.end)}`
         : `+${durationText(p.start)} – +${durationText(p.end)}`;
+      band.setAttribute(
+        "aria-label",
+        `${p.label}, ${range}, duration ${durationText(p.milliseconds)}`,
+      );
+      band.setAttribute("aria-expanded", String(this.inspectedIndex === i));
+      if (state.index === i) band.setAttribute("aria-current", "step");
+      else band.removeAttribute("aria-current");
+      if (this.inspectedIndex === i) {
+        root.querySelector(".detail-name").textContent = p.label;
+        root.querySelector(".detail-time").textContent = range;
+        root.querySelector(".detail-duration").textContent =
+          `Duration ${durationText(p.milliseconds)}`;
+        const icon = /** @type {HTMLElement} */ (
+          root.querySelector(".detail-icon")
+        );
+        icon.hidden = !p.icon;
+        if (p.icon) icon.setAttribute("icon", p.icon);
+      }
     });
+    const detail = /** @type {HTMLElement} */ (
+      root.querySelector(".phase-detail")
+    );
+    detail.hidden = this.inspectedIndex < 0;
+    this.toggleAttribute("details-open", !detail.hidden);
+    const nowLabel = /** @type {HTMLElement} */ (
+      root.querySelector(".now-label")
+    );
+    nowLabel.hidden = cursor.hidden;
+    nowLabel.textContent = `NOW ${time(now)}`;
+    nowLabel.dataset.fraction = String(
+      Math.min(1, Math.max(0, progress / 100)),
+    );
+    this.scheduleLayout();
     const start = /** @type {HTMLButtonElement} */ (
       root.querySelector(".start")
     );

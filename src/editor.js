@@ -168,13 +168,23 @@ export class TimeSequenceCardEditor extends HTMLElement {
         this.emit();
       },
     );
+    this.field(
+      root,
+      "Minimalist mode",
+      this.config.minimalist ?? false,
+      (v) => {
+        this.config.minimalist = v;
+        this.emit();
+      },
+      "checkbox",
+    );
     const display = el("div");
     display.className = "grid";
     root.append(display);
     this.field(
       display,
       "Timeline height",
-      this.config.height ?? 140,
+      this.config.height ?? (this.config.minimalist ? 80 : 120),
       (v) => {
         this.config.height = Number(v);
         this.emit();

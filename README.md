@@ -99,19 +99,34 @@ card:
 
 ## Visual editor and display options
 
-The native card editor supports title, mode, anchor, phase labels/durations/icons/colours, reordering, adding/removing phases, and a read-only calculated-time preview. The preview never starts a live session.
+The native card editor supports title, mode, anchor, minimalist mode, phase labels/durations/icons/colours, reordering, adding/removing phases, and a read-only calculated-time preview. The preview never starts a live session.
 
 Optional top-level settings:
 
 - `timezone`: IANA time-zone name; default is the Home Assistant configured time zone, falling back to the browser only before HA provides its configuration.
-- `height`: timeline area height, 80–400 pixels; default 140. Narrow cards compact it to preserve space.
+- `minimalist`: focus on the timeline and a full-width phase name above it; hides the title, mode badge, schedule summary and countdown row. Default `false`. Manual Start/Reset remain available as compact controls.
+- `height`: timeline area height (bar plus time labels), 80–400 pixels; defaults to 120, or 80 with `minimalist: true`. The bar fills the available area rather than being capped at a fixed height.
 - `show_now`: show the active current-time marker; default `true`.
 - `show_remaining`: show countdowns; default `true`.
 - `session_id`: manual browser-local persistence, described above.
 
 Each phase requires `label` and `duration`. Optional `id` must be unique, `icon` uses `mdi:name`, and `color` uses `#RRGGBB`. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
 
-Short phases keep their proportional width. Labels may be truncated or hidden in the band; the complete ordered legend always exposes every label, duration and boundary. Completed phases are muted and the active phase is marked in both the strip and the legend. Home Assistant icons and theme colours are used when available.
+### Timeline-first layout
+
+There is no permanent duplicate legend in either mode. Short phases keep their proportional width; tap, hover or keyboard-focus any segment for its full name, exact boundaries, duration and optional icon. Tap pins the details open; tap the segment again, use the close button, press Escape or tap outside the card to dismiss. Details overlay the page rather than reserving space below the timeline.
+
+The current phase name uses the full width above the bar, not the width of its segment. Inspecting another phase shows that phase's full name above the bar while its details are open. The active phase label is omitted inside its segment to avoid duplication.
+
+The NOW marker and current time sit below the bar. Time ticks automatically yield when they overlap NOW or each other; labels return as space becomes available. The marker label stays inside the card even near either endpoint. Exact boundaries remain available in each phase's details.
+
+For a compact scheduled widget, add this at the top level:
+
+```yaml
+minimalist: true
+```
+
+Timing, phase colours and interactions are unchanged by minimalist mode. Completed phases are muted. Home Assistant icons and theme colours are used when available.
 
 ## Dates, clocks and limitations
 
