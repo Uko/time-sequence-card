@@ -125,6 +125,16 @@ export function normalizeConfig(input) {
       (typeof p.color !== "string" || !/^#[a-fA-F0-9]{6}$/.test(p.color))
     )
       fail("colors must be #RRGGBB");
+    if (
+      p.sound !== undefined &&
+      (typeof p.sound !== "string" ||
+        !p.sound.startsWith("/") ||
+        p.sound.startsWith("//") ||
+        /[\\\s\u0000-\u001f\u007f]/.test(p.sound))
+    )
+      fail(
+        "sound must be a same-origin root-relative media path, such as /local/sounds/example.mp3",
+      );
     return {
       ...p,
       id,

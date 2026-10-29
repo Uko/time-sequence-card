@@ -116,6 +116,23 @@ Optional top-level settings:
 
 Each phase requires `label` and `duration`. Optional `id` must be unique, and `color` uses `#RRGGBB`. Legacy `icon` fields are ignored; removing them from existing YAML is optional. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
 
+### Event-end sounds
+
+```yaml
+phases:
+  - label: Questions
+    duration: "00:03:00"
+    sound: /local/sounds/end.mp3
+```
+
+An optional `sound` on a phase plays **when that phase ends**, in the browser displaying the card, not on a Home Assistant media player. Omit it to keep a phase silent. The visual editor has a **Phase N end sound** field; clearing it removes the sound. Use a same-origin root-relative media URL such as `/local/sounds/end.mp3` (a file under `/config/www/sounds/`). Absolute/external URLs, protocol-relative URLs and `media-source://` identifiers are not supported. Files are requested only when an alert is attempted; no audio files are bundled.
+
+Works in manual and scheduled mode, including the final phase when automatic window hiding is enabled and when its end crosses midnight. Repeated ticks or HA updates do not replay an event. Each visible card instance/browser handles its own audio; this is not a server-side alarm and cannot guarantee playback with a closed or suspended browser.
+
+There are no catch-up sounds on initial load/reload, config changes, preview or tab visibility recovery. Preview cards, background tabs and externally hidden cards are silent. Ordinary delayed ticks get the original 75-second grace period; if several configured ends were crossed, only the most recent is signalled rather than playing a backlog. Reset, a new manual Start, configuration changes and disconnect stop current playback; a new sound replaces any sound still playing in that card.
+
+Browsers may require a user interaction or an autoplay permission/policy, especially for scheduled playback. Missing files, unsupported media or blocked playback produce a card warning when the card is visible, without retrying every second. This does not bypass browser permissions or change kiosk policy. Volume follows the browser/device settings. Timing and visibility rules are unchanged.
+
 ### Automatic scheduled visibility
 
 ```yaml

@@ -314,6 +314,19 @@ export class TimeSequenceCardEditor extends HTMLElement {
         },
         "color",
       );
+      const sound = this.field(
+        grid,
+        `Phase ${i + 1} end sound`,
+        p.sound ?? "",
+        (value) => {
+          if (value) p.sound = value;
+          else delete p.sound;
+          this.emit();
+        },
+      );
+      sound.placeholder = "/local/sounds/example.mp3";
+      sound.title =
+        "Optional sound file on this Home Assistant server, played in this browser when the phase ends. Blank means silent.";
       const actions = el("div");
       actions.className = "actions";
       for (const [label, offset] of [

@@ -7,6 +7,7 @@ import {
   isSequenceVisible,
 } from "./timing.js";
 import { styles } from "./styles.js";
+import { PhaseSoundPlayer } from "./sound.js";
 import {
   translate,
   translationLanguage,
@@ -43,6 +44,11 @@ export class TimeSequenceCard extends HTMLElement {
     // HA must keep our clock connected while its wrapper is hidden.
     this.connectedWhileHidden = true;
     this.storageWarning = "";
+    this.soundWarning = "";
+    this.soundPlayer = new PhaseSoundPlayer((message) => {
+      this.soundWarning = message;
+      this.tick();
+    });
     this.inspectedIndex = -1;
     this.detailPinned = false;
     this.layoutFrame = 0;
@@ -53,7 +59,10 @@ export class TimeSequenceCard extends HTMLElement {
     this.onOutside = (event) => {
       if (!event.composedPath().includes(this)) this.inspectPhase(-1);
     };
-    this.onVisibility = () => this.tick();
+    this.onVisibility = () => {
+      this.soundPlayer.reset();
+      this.tick();
+    };
     this.onStorage = (event) => {
       if (event.key === this.storageKey()) {
         this.readSession();
@@ -80,6 +89,7 @@ export class TimeSequenceCard extends HTMLElement {
     return document.createElement("time-sequence-card-editor");
   }
   set preview(value) {
+    if (this._preview !== (value === true)) this.soundPlayer.reset();
     this._preview = value === true;
     this.tick();
   }
@@ -120,6 +130,8 @@ export class TimeSequenceCard extends HTMLElement {
       this.signature(this.config) !== this.signature(config);
     this.config = config;
     if (changed) {
+      this.soundPlayer.reset(timingChanged);
+      this.soundWarning = "";
       if (timingChanged) {
         this.startedAt = null;
         this.readSession();
@@ -149,6 +161,7 @@ export class TimeSequenceCard extends HTMLElement {
     this.timer = window.setInterval(() => this.tick(), 1000);
   }
   disconnectedCallback() {
+    this.soundPlayer.reset();
     clearInterval(this.timer);
     this.timer = 0;
     cancelAnimationFrame(this.layoutFrame);
@@ -350,6 +363,8 @@ export class TimeSequenceCard extends HTMLElement {
           ).status !== "finished"
         )
           return;
+        this.soundPlayer.reset(true);
+        this.soundWarning = "";
         this.startedAt = now;
         this.inspectedIndex = -1;
         this.detailPinned = false;
@@ -358,6 +373,8 @@ export class TimeSequenceCard extends HTMLElement {
       });
       const reset = element("button", "reset", "Reset");
       reset.addEventListener("click", () => {
+        this.soundPlayer.reset(true);
+        this.soundWarning = "";
         this.startedAt = null;
         this.inspectedIndex = -1;
         this.detailPinned = false;
@@ -466,14 +483,28 @@ export class TimeSequenceCard extends HTMLElement {
       sequence = resolveSequence(this.config, now, zone, this.startedAt);
     } catch {
       warning.textContent = "Unable to resolve time zone or scheduled time.";
+      this.soundPlayer.reset();
       this.setWindowVisibility(true);
       return;
     }
+    // Evaluate sound before auto-hide so the final event can still signal its end.
+    this.soundPlayer.update(
+      sequence,
+      now,
+      () =>
+        this.isConnected &&
+        !this.preview &&
+        !this.hidden &&
+        document.visibilityState === "visible" &&
+        this.getClientRects().length > 0,
+    );
     this.setWindowVisibility(
       this.preview || isSequenceVisible(this.config, sequence, now),
     );
     if (this.hidden) return;
-    warning.textContent = this.storageWarning;
+    warning.textContent = [this.storageWarning, this.soundWarning]
+      .filter(Boolean)
+      .join(" ");
     const state = sequenceState(sequence, now);
     // An idle manual timeline previews offsets without inventing a start time.
     const display =
