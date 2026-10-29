@@ -184,8 +184,13 @@ test("dragging auto-scrolls a nested editor across a shadow-root boundary", asyn
     )
     .toBe(true);
   await page.mouse.move(box.x + 80, box.y + box.height / 2);
+  // Pointer moves can be coalesced: wait until the editor has observed leaving
+  // the scroll edge before measuring the final drop target.
+  await expect
+    .poll(() => page.evaluate(() => window.editor.drag?.y))
+    .toBe(box.y + box.height / 2);
   const to = await page.locator(".sequence-entry").nth(3).boundingBox();
-  await page.mouse.move(to.x + 30, to.y + to.height - 5);
+  await page.mouse.move(to.x + 30, to.y + to.height * 0.75);
   await page.mouse.up();
   expect(
     await page.evaluate(() => window.changed.phases.map((p) => p.id)),

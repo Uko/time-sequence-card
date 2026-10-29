@@ -227,7 +227,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
     root.replaceChildren();
     const style = el(
       "style",
-      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid var(--input-idle-line-color,var(--divider-color,#8887));border-radius:6px;background:var(--input-fill-color,var(--ha-card-background,var(--card-background-color,#fff)));color:var(--input-ink-color,var(--primary-text-color,#222));min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.drag-handle{cursor:grab;touch-action:none;user-select:none;min-width:44px;min-height:44px;margin-right:8px}.dragging{opacity:.5}.drop-before{box-shadow:0 -3px var(--primary-color,#148aa8)}.drop-after{box-shadow:0 3px var(--primary-color,#148aa8)}.sequence-warning{color:var(--warning-color,#b57900)}[hidden]{display:none!important}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
+      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid var(--input-idle-line-color,var(--divider-color,#8887));border-radius:6px;background:var(--input-fill-color,var(--ha-card-background,var(--card-background-color,#fff)));color:var(--input-ink-color,var(--primary-text-color,#222));min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.drag-handle{cursor:grab;touch-action:none;user-select:none;min-width:44px;min-height:44px;margin-right:8px}.dragging{opacity:.5}.drop-before{box-shadow:0 -3px var(--primary-color,#148aa8)}.drop-after{box-shadow:0 3px var(--primary-color,#148aa8)}.sequence-warning{color:var(--warning-color,#b57900)}[hidden]{display:none!important}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
     );
     root.append(style);
     root.append(
@@ -604,9 +604,22 @@ export class TimeSequenceCardEditor extends HTMLElement {
               second: "2-digit",
               hourCycle: "h23",
             }).format(value);
-      target.textContent = result.phases
-        .map((p) => `${time(p.start)} – ${time(p.end)}  ${p.label}`)
-        .join("\n");
+      const lines = [];
+      let phaseIndex = 0;
+      for (const entry of config.phases) {
+        if (isSoundEntry(entry)) {
+          const at = result.phases[phaseIndex]?.start ?? result.end;
+          lines.push(`${time(at)}  Sound: ${entry.sound}`);
+        } else {
+          const phase = result.phases[phaseIndex++];
+          lines.push(
+            `${time(phase.start)} – ${time(phase.end)}  ${phase.label}`,
+          );
+          if (entry.sound)
+            lines.push(`${time(phase.end)}  Sound: ${entry.sound}`);
+        }
+      }
+      target.textContent = lines.join("\n");
       this.showError("");
     } catch (error) {
       target.textContent = "Correct the configuration to preview the sequence.";
