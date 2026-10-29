@@ -264,6 +264,22 @@ export class TimeSequenceCardEditor extends HTMLElement {
       input.max = "1440";
       input.step = "any";
     }
+    const textScale = this.field(
+      display,
+      "Event text scale",
+      this.config.event_text_scale ?? 1,
+      (value) => {
+        if (value === "") delete this.config.event_text_scale;
+        else this.config.event_text_scale = Number(value);
+        this.emit();
+      },
+      "number",
+    );
+    textScale.min = "0.5";
+    textScale.max = "3";
+    textScale.step = "0.1";
+    textScale.title =
+      "1 = default; 0.8 = 20% smaller; 1.2 = 20% larger. Event labels only.";
     for (const [i, p] of (this.config.phases ?? []).entries()) {
       const group = el("fieldset");
       group.append(el("legend", `Phase ${i + 1}`));

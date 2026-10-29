@@ -92,6 +92,14 @@ export function normalizeConfig(input) {
     )
       fail(`${key} must be 0–1440 minutes`);
   }
+  if (
+    input.event_text_scale !== undefined &&
+    (typeof input.event_text_scale !== "number" ||
+      !Number.isFinite(input.event_text_scale) ||
+      input.event_text_scale < 0.5 ||
+      input.event_text_scale > 3)
+  )
+    fail("event_text_scale must be a number from 0.5 to 3");
   const ids = new Set();
   const reserved = new Set(
     input.phases.map((p) => p?.id).filter((id) => id !== undefined),
@@ -126,6 +134,7 @@ export function normalizeConfig(input) {
     title: input.title ?? "Time sequence",
     height: input.height ?? (input.minimalist ? 80 : 120),
     minimalist: input.minimalist ?? false,
+    event_text_scale: input.event_text_scale ?? 1,
     show_now: input.show_now ?? true,
     padding_before: input.padding_before ?? 0,
     padding_after: input.padding_after ?? 0,

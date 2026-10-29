@@ -200,6 +200,10 @@ export class TimeSequenceCard extends HTMLElement {
     style.textContent = styles;
     root.append(style);
     const card = element("ha-card");
+    card.style.setProperty(
+      "--event-text-scale",
+      String(this.config.event_text_scale),
+    );
     card.classList.toggle("minimalist", this.config.minimalist);
     card.addEventListener("pointerleave", () => {
       if (
