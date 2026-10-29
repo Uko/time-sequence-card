@@ -98,7 +98,7 @@ card:
 
 ## Visual editor and display options
 
-The native card editor supports title, mode, anchor, minimalist mode, phase labels/durations/colours, reordering, adding/removing phases, and a read-only calculated-time preview. It follows Home Assistant's field colours and selected light/dark mode, including native form controls. The preview never starts a live session.
+The native card editor supports title, mode, anchor, minimalist mode, phase labels/durations/colours, draggable phase/sound rows, adding/removing rows, and a read-only calculated-time preview. It follows Home Assistant's field colours and selected light/dark mode, including native form controls. The preview never starts a live session.
 
 Optional top-level settings:
 
@@ -116,22 +116,42 @@ Optional top-level settings:
 
 Each phase requires `label` and `duration`. Optional `id` must be unique, and `color` uses `#RRGGBB`. Legacy `icon` fields are ignored; removing them from existing YAML is optional. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
 
-### Event-end sounds
+### Ordered sound cues
+
+Interleave sound-only entries with timed phases. The list is the playback order:
 
 ```yaml
 phases:
-  - label: Questions
+  - sound: /local/sounds/start.mp3
+  - id: setup
+    label: Setup
+    duration: "00:01:00"
+  - sound: /local/sounds/ready.mp3
+  - id: talk
+    label: Talk
+    duration: "00:10:00"
+  - sound: /local/sounds/questions.mp3
+  - id: questions
+    label: Questions
     duration: "00:03:00"
-    sound: /local/sounds/end.mp3
+  - sound: /local/sounds/finish.mp3
 ```
 
-An optional `sound` on a phase plays **when that phase ends**, in the browser displaying the card, not on a Home Assistant media player. Omit it to keep a phase silent. The visual editor has a **Phase N end sound** field; clearing it removes the sound. Use a same-origin root-relative media URL such as `/local/sounds/end.mp3` (a file under `/config/www/sounds/`). Absolute/external URLs, protocol-relative URLs and `media-source://` identifiers are not supported. Files are requested only when an alert is attempted; no audio files are bundled.
+A sound-only row has `sound` and an optional unique `id`; no label or duration. It plays at its position: before the first phase on manual **Start** or scheduled sequence start, between phases, or at the sequence end. All cues are optional. They create no timeline segments and consume no sequence time. Padding never moves a cue. Support remains 1–50 timed phases, with up to 101 total list entries.
 
-Works in manual and scheduled mode, including the final phase when automatic window hiding is enabled and when its end crosses midnight. Repeated ticks or HA updates do not replay an event. Each visible card instance/browser handles its own audio; this is not a server-side alarm and cannot guarantee playback with a closed or suspended browser.
+The visual editor offers **Add phase**, **Add sound**, and a dedicated drag handle on each row. Mouse and touch dragging move exactly that row, not an implicit phase/sound pair; the drop line shows the insertion position. Drag near the scroll area's edge to scroll a long list. Escape, pointer cancellation and dropping outside the list cancel the move. Arrow keys on a handle and the **Move up/down** buttons provide alternatives. Input fields remain ordinary editable controls.
 
-There are no catch-up sounds on initial load/reload, config changes, preview or tab visibility recovery. Preview cards, background tabs and externally hidden cards are silent. Ordinary delayed ticks get the original 75-second grace period; if several configured ends were crossed, only the most recent is signalled rather than playing a backlog. Reset, a new manual Start, configuration changes and disconnect stop current playback; a new sound replaces any sound still playing in that card.
+**Adjacent sound rows generate a non-blocking warning**, both in the editor and on the card. They share a timestamp and play consecutively in list order, without extending phase durations. If another configured sound boundary arrives before the group finishes, it replaces the unfinished group rather than delaying the timeline. Remove a sound row to make that boundary silent.
 
-Browsers may require a user interaction or an autoplay permission/policy, especially for scheduled playback. Missing files, unsupported media or blocked playback produce a card warning when the card is visible, without retrying every second. This does not bypass browser permissions or change kiosk policy. Volume follows the browser/device settings. Timing and visibility rules are unchanged.
+Audio plays in the browser displaying the card, not on a Home Assistant media player. Use a same-origin root-relative media URL such as `/local/sounds/end.mp3` (a file under `/config/www/sounds/`). Absolute/external URLs, protocol-relative URLs and `media-source://` identifiers are not supported. Files are requested only when a cue is attempted; no audio files are bundled.
+
+Works in manual and scheduled mode, including final cues when automatic window hiding is enabled and across midnight. Repeated ticks or HA updates do not replay a cue. Each visible card instance/browser handles its own audio; this is not a server-side alarm and cannot guarantee playback with a closed or suspended browser.
+
+There are no catch-up sounds on initial load/reload, config changes, preview or tab visibility recovery. Preview cards, background tabs and externally hidden cards are silent. Ordinary delayed ticks have a 75-second grace period; if several boundaries were crossed, only the most recent boundary's sounds play rather than a backlog. Reset, a new manual Start, configuration changes and disconnect stop current playback and discard queued sounds.
+
+Browsers may require a user interaction or an autoplay permission/policy, especially for scheduled playback. Missing files, unsupported media or blocked playback produce a card warning when visible, without retrying every second. This does not bypass browser permissions or change kiosk policy. Volume follows the browser/device settings. Timing and visibility rules are unchanged.
+
+**Compatibility:** a `sound` property on a timed phase still means play at that phase's end. The visual editor displays it as a separate following sound row and writes the mixed list when edited. Existing YAML keeps working without migration. Adding, moving or editing only sound rows does not invalidate a manual session; changing timed-phase identity, ordering or durations still does.
 
 ### Automatic scheduled visibility
 
@@ -204,7 +224,7 @@ Timing, phase colours and interactions are unchanged by minimalist mode. Complet
 - Overnight sequences select an active occurrence from the previous/current/next anchor date. If DST makes long daily sequences overlap, the latest-started active occurrence wins. Otherwise the card displays the current anchor date's sequence, including its finished state.
 - DST uses Temporal's compatible resolution: nonexistent local anchors shift forward by the gap; ambiguous anchors use the earlier occurrence. Durations remain real elapsed minutes/seconds, not nominal wall-clock differences.
 - Display state is recomputed from the timestamp every second and immediately on page visibility changes. Sleeping or throttled browsers catch up without accumulating timer drift. Keep the browser clock synchronised.
-- This first version is a **visual timeline**, not a backend automation runner. Closing the page stops rendering, not elapsed time. It does not dispatch HA actions or play sounds. Reliable notifications should remain backend automations; optional frontend audio and reusable multi-schedule presets are follow-up work.
+- This is a **visual timeline**, not a backend automation runner. Closing the page stops rendering and browser audio, not elapsed time. It does not dispatch HA actions. Reliable notifications should remain backend automations; optional frontend sounds depend on the visible browser.
 - The current-time marker and idle status have the translations described above. Other controls and editor labels currently use English. Phase labels and custom wording can use any language.
 
 ## Development

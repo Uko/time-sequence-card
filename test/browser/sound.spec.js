@@ -163,7 +163,7 @@ test("initially elapsed events and suspension recovery do not emit old alarms; d
     await page.evaluate(() => window.card.soundPlayer.previousNow),
   ).toBeNull();
 });
-test("editor configures optional sound paths per phase and clearing makes a phase silent", async ({
+test("legacy end sounds appear as separate editor rows and removing one makes it silent", async ({
   page,
 }) => {
   await mount(page);
@@ -178,16 +178,65 @@ test("editor configures optional sound paths per phase and clearing makes a phas
     );
     document.querySelector("main").replaceChildren(window.editor);
   });
-  const input = page.getByLabel("Phase 1 end sound", { exact: true });
+  const input = page.getByLabel("Sound 1 file", { exact: true });
   await expect(input).toHaveValue("/test-tone.wav");
   await input.fill("/local/sounds/example.mp3");
   await input.dispatchEvent("change");
-  expect(await page.evaluate(() => window.changed.phases[0].sound)).toBe(
+  expect(await page.evaluate(() => window.changed.phases[1].sound)).toBe(
     "/local/sounds/example.mp3",
   );
-  await input.fill("");
-  await input.dispatchEvent("change");
+  await page
+    .getByRole("button", { name: "Remove sound 1", exact: true })
+    .click();
   expect(
     await page.evaluate(() => window.changed.phases[0].sound),
   ).toBeUndefined();
+});
+test("mixed cues play at manual start, between phases and at the end; adjacent sounds play in row order", async ({
+  page,
+}) => {
+  await mount(page, {
+    phases: [
+      { sound: "/test-tone.wav" },
+      { sound: "/test-tone.wav" },
+      { id: "a", label: "Setup", duration: "00:00:02" },
+      { sound: "/test-tone.wav" },
+      { id: "b", label: "Talk", duration: "00:00:02" },
+      { sound: "/test-tone.wav" },
+    ],
+  });
+  await expect(page.locator(".band")).toHaveCount(2);
+  await expect(page.locator(".warning")).toContainText("Adjacent sounds");
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.playStarted)).toBe(2);
+  await page.clock.runFor(2000);
+  await expect.poll(() => page.evaluate(() => window.playStarted)).toBe(3);
+  await page.clock.runFor(2000);
+  await expect.poll(() => page.evaluate(() => window.playStarted)).toBe(4);
+});
+test("scheduled leading cue starts when an auto-hidden card enters its window", async ({
+  page,
+}) => {
+  await mount(
+    page,
+    {
+      mode: "scheduled",
+      anchor: { at: "12:01", edge: "start" },
+      hide_outside_window: true,
+      phases: [
+        { sound: "/test-tone.wav" },
+        { label: "Setup", duration: "00:00:02" },
+        { sound: "/test-tone.wav" },
+      ],
+    },
+    "2026-01-01T12:00:58Z",
+  );
+  await expect(page.locator("time-sequence-card")).toBeHidden();
+  await page.mouse.click(5, 5);
+  await page.clock.runFor(2000);
+  await expect(page.locator("time-sequence-card")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.playStarted)).toBe(1);
+  await page.clock.runFor(2000);
+  await expect.poll(() => page.evaluate(() => window.playStarted)).toBe(2);
+  await expect(page.locator("time-sequence-card")).toBeHidden();
 });

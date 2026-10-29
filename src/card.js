@@ -5,6 +5,8 @@ import {
   nextScheduledStart,
   timelineWindow,
   isSequenceVisible,
+  timedPhases,
+  sequenceWarnings,
 } from "./timing.js";
 import { styles } from "./styles.js";
 import { PhaseSoundPlayer } from "./sound.js";
@@ -185,7 +187,9 @@ export class TimeSequenceCard extends HTMLElement {
       : null;
   }
   signature(config = this.config) {
-    return JSON.stringify(config.phases.map((p) => [p.id, p.milliseconds]));
+    return JSON.stringify(
+      timedPhases(config).map((p) => [p.id, p.milliseconds]),
+    );
   }
   readSession() {
     const key = this.storageKey();
@@ -200,7 +204,10 @@ export class TimeSequenceCard extends HTMLElement {
         Number.isFinite(
           new Date(
             saved.startedAt +
-              this.config.phases.reduce((sum, p) => sum + p.milliseconds, 0),
+              timedPhases(this.config).reduce(
+                (sum, p) => sum + p.milliseconds,
+                0,
+              ),
           ).getTime(),
         )
           ? saved.startedAt
@@ -275,13 +282,13 @@ export class TimeSequenceCard extends HTMLElement {
       "Phase timeline; tap or focus a phase for details",
     );
     const track = element("div", "track");
-    const total = this.config.phases.reduce(
+    const total = timedPhases(this.config).reduce(
       (sum, p) => sum + p.milliseconds,
       0,
     );
     const viewport = timelineWindow(this.config, { start: 0, end: total });
     let offset = 0;
-    for (const [i, p] of this.config.phases.entries()) {
+    for (const [i, p] of timedPhases(this.config).entries()) {
       const band = element("button", "band");
       band.type = "button";
       band.setAttribute("aria-controls", "phase-detail");
@@ -325,12 +332,12 @@ export class TimeSequenceCard extends HTMLElement {
     nowLabel.hidden = true;
     axis.append(nowLabel);
     offset = 0;
-    for (let i = 0; i <= this.config.phases.length; i++) {
+    for (let i = 0; i <= timedPhases(this.config).length; i++) {
       const boundary = element("span", "boundary");
       boundary.style.left = `${((offset - viewport.start) / viewport.duration) * 100}%`;
       boundary.dataset.index = String(i);
       axis.append(boundary);
-      offset += this.config.phases[i]?.milliseconds ?? 0;
+      offset += timedPhases(this.config)[i]?.milliseconds ?? 0;
     }
     timeline.append(track, axis);
     const detail = element("div", "phase-detail");
@@ -364,6 +371,7 @@ export class TimeSequenceCard extends HTMLElement {
         )
           return;
         this.soundPlayer.reset(true);
+        this.soundPlayer.previousNow = now - 1;
         this.soundWarning = "";
         this.startedAt = now;
         this.inspectedIndex = -1;
@@ -487,7 +495,10 @@ export class TimeSequenceCard extends HTMLElement {
       this.setWindowVisibility(true);
       return;
     }
-    // Evaluate sound before auto-hide so the final event can still signal its end.
+    // Unhide before start cues; defer hiding until after final cues.
+    const visible =
+      this.preview || isSequenceVisible(this.config, sequence, now);
+    if (visible) this.setWindowVisibility(true);
     this.soundPlayer.update(
       sequence,
       now,
@@ -498,13 +509,16 @@ export class TimeSequenceCard extends HTMLElement {
         document.visibilityState === "visible" &&
         this.getClientRects().length > 0,
     );
-    this.setWindowVisibility(
-      this.preview || isSequenceVisible(this.config, sequence, now),
-    );
+    if (!visible) this.setWindowVisibility(false);
     if (this.hidden) return;
-    warning.textContent = [this.storageWarning, this.soundWarning]
+    const message = [
+      ...sequenceWarnings(this.config.phases),
+      this.storageWarning,
+      this.soundWarning,
+    ]
       .filter(Boolean)
       .join(" ");
+    if (warning.textContent !== message) warning.textContent = message;
     const state = sequenceState(sequence, now);
     // An idle manual timeline previews offsets without inventing a start time.
     const display =

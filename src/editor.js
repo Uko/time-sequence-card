@@ -1,4 +1,10 @@
-import { normalizeConfig, resolveSequence } from "./timing.js";
+import {
+  normalizeConfig,
+  resolveSequence,
+  isSoundEntry,
+  timedPhases,
+  sequenceWarnings,
+} from "./timing.js";
 
 function el(tag, text = "") {
   const node = document.createElement(tag);
@@ -11,6 +17,9 @@ export class TimeSequenceCardEditor extends HTMLElement {
     this.attachShadow({ mode: "open" });
     /** @type {any} */ this.config = null;
     /** @type {any} */ this._hass = null;
+    /** @type {any} */ this.drag = null;
+    this.dragFrame = 0;
+    this.onBlur = () => this.cancelDrag();
   }
   set hass(value) {
     this._hass = value;
@@ -22,6 +31,15 @@ export class TimeSequenceCardEditor extends HTMLElement {
   }
   setConfig(input) {
     this.config = structuredClone(input);
+    if (Array.isArray(this.config.phases))
+      this.config.phases = this.config.phases.flatMap((p) => {
+        if (p && !isSoundEntry(p) && p.sound) {
+          const phase = { ...p };
+          delete phase.sound;
+          return [phase, { sound: p.sound }];
+        }
+        return [p];
+      });
     this.materializeIds();
     this.render();
   }
@@ -31,7 +49,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
       this.config.phases = this.config.phases.map((p, i) => ({
         ...p,
         id: normalized.phases[i].id,
-        color: normalized.phases[i].color,
+        ...(!isSoundEntry(p) ? { color: normalized.phases[i].color } : {}),
       }));
     } catch {
       /* Keep invalid YAML editable; preview explains its validation error. */
@@ -58,6 +76,136 @@ export class TimeSequenceCardEditor extends HTMLElement {
     const node = this.shadowRoot.querySelector(".error");
     if (node) node.textContent = message;
   }
+  connectedCallback() {
+    window.addEventListener("blur", this.onBlur);
+  }
+  disconnectedCallback() {
+    this.cancelDrag();
+    window.removeEventListener("blur", this.onBlur);
+  }
+  moveEntry(from, to) {
+    if (from === to || to < 0 || to >= this.config.phases.length) return;
+    this.materializeIds();
+    const [entry] = this.config.phases.splice(from, 1);
+    this.config.phases.splice(to, 0, entry);
+    this.emit();
+    this.render();
+    /** @type {HTMLElement} */ (
+      this.shadowRoot.querySelector(`.drag-handle[data-index="${to}"]`)
+    )?.focus();
+  }
+  cancelDrag() {
+    cancelAnimationFrame(this.dragFrame);
+    this.dragFrame = 0;
+    this.drag = null;
+    this.shadowRoot
+      .querySelectorAll(".dragging,.drop-before,.drop-after")
+      .forEach((e) =>
+        e.classList.remove("dragging", "drop-before", "drop-after"),
+      );
+  }
+  scrollContainer() {
+    let node = /** @type {HTMLElement|null} */ (this);
+    while (node) {
+      if (
+        /auto|scroll/.test(getComputedStyle(node).overflowY) &&
+        node.scrollHeight > node.clientHeight
+      )
+        return node;
+      const root = node.getRootNode();
+      node =
+        node.parentElement ??
+        (root instanceof ShadowRoot
+          ? /** @type {HTMLElement} */ (root.host)
+          : null);
+    }
+    return window;
+  }
+  updateDrop() {
+    const d = this.drag;
+    if (!d?.active) return;
+    const target = this.shadowRoot
+      .elementFromPoint(d.x, d.y)
+      ?.closest(".sequence-entry");
+    if (!target) {
+      d.insert = null;
+      this.shadowRoot
+        .querySelectorAll(".drop-before,.drop-after")
+        .forEach((e) => e.classList.remove("drop-before", "drop-after"));
+      return;
+    }
+    this.shadowRoot
+      .querySelectorAll(".drop-before,.drop-after")
+      .forEach((e) => e.classList.remove("drop-before", "drop-after"));
+    const box = target.getBoundingClientRect(),
+      after = d.y > box.top + box.height / 2;
+    d.insert =
+      Number(/** @type {HTMLElement} */ (target).dataset.index) +
+      (after ? 1 : 0);
+    target.classList.add(after ? "drop-after" : "drop-before");
+  }
+  beginDrag(handle, index, event) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    this.cancelDrag();
+    handle.focus();
+    handle.setPointerCapture(event.pointerId);
+    this.drag = {
+      from: index,
+      insert: index,
+      x: event.clientX,
+      y: event.clientY,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false,
+      scroll: this.scrollContainer(),
+    };
+  }
+  dragMove(event) {
+    const d = this.drag;
+    if (!d) return;
+    d.x = event.clientX;
+    d.y = event.clientY;
+    if (!d.active && Math.hypot(d.x - d.startX, d.y - d.startY) < 5) return;
+    d.active = true;
+    this.shadowRoot
+      .querySelector(`.sequence-entry[data-index="${d.from}"]`)
+      .classList.add("dragging");
+    this.updateDrop();
+    if (!this.dragFrame) {
+      const step = () => {
+        this.dragFrame = 0;
+        const state = this.drag;
+        if (!state?.active) return;
+        const box =
+          state.scroll instanceof HTMLElement
+            ? state.scroll.getBoundingClientRect()
+            : { top: 0, bottom: innerHeight };
+        const dy =
+          state.y < Math.max(0, box.top) + 40
+            ? -20
+            : state.y > Math.min(innerHeight, box.bottom) - 40
+              ? 20
+              : 0;
+        if (dy) {
+          state.scroll.scrollBy(0, dy);
+          this.updateDrop();
+        }
+        this.dragFrame = requestAnimationFrame(step);
+      };
+      this.dragFrame = requestAnimationFrame(step);
+    }
+  }
+  finishDrag(event) {
+    const d = this.drag;
+    if (!d) return;
+    d.x = event.clientX;
+    d.y = event.clientY;
+    this.updateDrop();
+    const to = d.insert - (d.insert > d.from ? 1 : 0);
+    this.cancelDrag();
+    if (d.active && d.insert !== null) this.moveEntry(d.from, to);
+  }
   field(parent, label, value, change, type = "text") {
     const wrapper = el("label");
     wrapper.append(el("span", label));
@@ -75,10 +223,11 @@ export class TimeSequenceCardEditor extends HTMLElement {
   }
   render() {
     const root = this.shadowRoot;
+    this.cancelDrag();
     root.replaceChildren();
     const style = el(
       "style",
-      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid var(--input-idle-line-color,var(--divider-color,#8887));border-radius:6px;background:var(--input-fill-color,var(--ha-card-background,var(--card-background-color,#fff)));color:var(--input-ink-color,var(--primary-text-color,#222));min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
+      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid var(--input-idle-line-color,var(--divider-color,#8887));border-radius:6px;background:var(--input-fill-color,var(--ha-card-background,var(--card-background-color,#fff)));color:var(--input-ink-color,var(--primary-text-color,#222));min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.drag-handle{cursor:grab;touch-action:none;user-select:none;min-width:44px;min-height:44px;margin-right:8px}.dragging{opacity:.5}.drop-before{box-shadow:0 -3px var(--primary-color,#148aa8)}.drop-after{box-shadow:0 3px var(--primary-color,#148aa8)}.sequence-warning{color:var(--warning-color,#b57900)}[hidden]{display:none!important}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
     );
     root.append(style);
     root.append(
@@ -290,43 +439,83 @@ export class TimeSequenceCardEditor extends HTMLElement {
     textScale.step = "0.1";
     textScale.title =
       "1 = default; 0.8 = 20% smaller; 1.2 = 20% larger. Event labels only.";
+    const warning = el("p");
+    warning.className = "sequence-warning";
+    warning.setAttribute("role", "status");
+    root.append(warning);
+    let phaseNumber = 0,
+      soundNumber = 0;
     for (const [i, p] of (this.config.phases ?? []).entries()) {
+      const soundOnly = isSoundEntry(p),
+        number = soundOnly ? ++soundNumber : ++phaseNumber;
+      const kind = soundOnly ? "sound" : "phase";
       const group = el("fieldset");
-      group.append(el("legend", `Phase ${i + 1}`));
+      group.className = "sequence-entry";
+      group.dataset.index = String(i);
+      const legend = el("legend"),
+        handle = el("button", "↕");
+      handle.type = "button";
+      handle.className = "drag-handle";
+      handle.dataset.index = String(i);
+      handle.setAttribute("aria-label", `Drag ${kind} ${number}`);
+      handle.title =
+        "Drag to reorder; use arrow keys or Move buttons as an alternative.";
+      handle.addEventListener("pointerdown", (e) =>
+        this.beginDrag(handle, i, e),
+      );
+      handle.addEventListener("pointermove", (e) => this.dragMove(e));
+      handle.addEventListener("pointerup", (e) => this.finishDrag(e));
+      handle.addEventListener("pointercancel", () => this.cancelDrag());
+      handle.addEventListener("lostpointercapture", () => this.cancelDrag());
+      handle.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          this.cancelDrag();
+          return;
+        }
+        if (["ArrowUp", "ArrowDown"].includes(e.key)) {
+          e.preventDefault();
+          this.moveEntry(i, i + (e.key === "ArrowUp" ? -1 : 1));
+        }
+      });
+      legend.append(
+        handle,
+        el("span", `${soundOnly ? "Sound" : "Phase"} ${number}`),
+      );
+      group.append(legend);
       const grid = el("div");
       grid.className = "grid";
       group.append(grid);
-      this.field(grid, `Phase ${i + 1} label`, p.label, (v) => {
-        p.label = v;
-        this.emit();
-      });
-      this.field(grid, `Phase ${i + 1} duration`, p.duration, (v) => {
-        p.duration = v;
-        this.emit();
-      });
-      this.field(
-        grid,
-        `Phase ${i + 1} color`,
-        p.color ?? "#49a9bc",
-        (v) => {
-          p.color = v;
+      if (soundOnly) {
+        const input = this.field(
+          grid,
+          `Sound ${number} file`,
+          p.sound,
+          (value) => {
+            p.sound = value;
+            this.emit();
+          },
+        );
+        input.placeholder = "/local/sounds/example.mp3";
+      } else {
+        this.field(grid, `Phase ${number} label`, p.label, (value) => {
+          p.label = value;
           this.emit();
-        },
-        "color",
-      );
-      const sound = this.field(
-        grid,
-        `Phase ${i + 1} end sound`,
-        p.sound ?? "",
-        (value) => {
-          if (value) p.sound = value;
-          else delete p.sound;
+        });
+        this.field(grid, `Phase ${number} duration`, p.duration, (value) => {
+          p.duration = value;
           this.emit();
-        },
-      );
-      sound.placeholder = "/local/sounds/example.mp3";
-      sound.title =
-        "Optional sound file on this Home Assistant server, played in this browser when the phase ends. Blank means silent.";
+        });
+        this.field(
+          grid,
+          `Phase ${number} color`,
+          p.color ?? "#49a9bc",
+          (value) => {
+            p.color = value;
+            this.emit();
+          },
+          "color",
+        );
+      }
       const actions = el("div");
       actions.className = "actions";
       for (const [label, offset] of [
@@ -334,20 +523,17 @@ export class TimeSequenceCardEditor extends HTMLElement {
         ["down", 1],
       ]) {
         const button = el("button", `Move ${label}`);
-        button.setAttribute("aria-label", `Move phase ${i + 1} ${label}`);
+        button.type = "button";
+        button.setAttribute("aria-label", `Move ${kind} ${number} ${label}`);
         button.disabled =
           i + offset < 0 || i + offset >= this.config.phases.length;
-        button.addEventListener("click", () => {
-          const phases = this.config.phases;
-          [phases[i], phases[i + offset]] = [phases[i + offset], phases[i]];
-          this.emit();
-          this.render();
-        });
+        button.addEventListener("click", () => this.moveEntry(i, i + offset));
         actions.append(button);
       }
       const remove = el("button", "Remove");
-      remove.setAttribute("aria-label", `Remove phase ${i + 1}`);
-      remove.disabled = this.config.phases.length === 1;
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Remove ${kind} ${number}`);
+      remove.disabled = !soundOnly && timedPhases(this.config).length <= 1;
       remove.addEventListener("click", () => {
         this.config.phases.splice(i, 1);
         this.emit();
@@ -357,16 +543,25 @@ export class TimeSequenceCardEditor extends HTMLElement {
       group.append(actions);
       root.append(group);
     }
-    const add = el("button", "Add phase");
-    add.disabled = (this.config.phases?.length ?? 0) >= 50;
-    add.addEventListener("click", () => {
-      this.config.phases ??= [];
-      this.config.phases.push({ label: "New phase", duration: "00:05:00" });
-      this.materializeIds();
-      this.emit();
-      this.render();
-    });
-    root.append(add);
+    for (const kind of ["phase", "sound"]) {
+      const add = el("button", kind === "phase" ? "Add phase" : "Add sound");
+      add.type = "button";
+      add.disabled =
+        (this.config.phases?.length ?? 0) >= 101 ||
+        (kind === "phase" && timedPhases(this.config).length >= 50);
+      add.addEventListener("click", () => {
+        this.config.phases ??= [];
+        this.config.phases.push(
+          kind === "phase"
+            ? { label: "New phase", duration: "00:05:00" }
+            : { sound: "" },
+        );
+        this.materializeIds();
+        this.render();
+        this.emit();
+      });
+      root.append(add);
+    }
     root.append(
       el(
         "p",
@@ -386,6 +581,12 @@ export class TimeSequenceCardEditor extends HTMLElement {
   preview() {
     const target = this.shadowRoot.querySelector(".preview");
     if (!target || !this.config) return;
+    const warning = this.shadowRoot.querySelector(".sequence-warning");
+    if (warning) {
+      const message = sequenceWarnings(this.config.phases ?? []).join(" ");
+      if (warning.textContent !== message) warning.textContent = message;
+      /** @type {HTMLElement} */ (warning).hidden = !message;
+    }
     try {
       const config = normalizeConfig(this.config);
       const timezone =

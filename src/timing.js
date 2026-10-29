@@ -4,13 +4,34 @@ const COLORS = ["#e6ae47", "#49a9bc", "#8eaf67", "#ae88cb", "#dc7272"];
 function fail(message) {
   throw new Error(`Time Sequence Card: ${message}`);
 }
+export function isSoundEntry(entry) {
+  return (
+    !!entry &&
+    typeof entry === "object" &&
+    "sound" in entry &&
+    !("label" in entry) &&
+    !("duration" in entry)
+  );
+}
+export function timedPhases(config) {
+  return config.phases.filter((p) => !isSoundEntry(p));
+}
+export function sequenceWarnings(entries) {
+  return entries.flatMap((entry, i) =>
+    i > 0 && isSoundEntry(entry) && isSoundEntry(entries[i - 1])
+      ? [
+          `Adjacent sounds at entries ${i} and ${i + 1} share a timestamp and play consecutively without adding time.`,
+        ]
+      : [],
+  );
+}
 export function normalizeConfig(input) {
   if (!input || !["manual", "scheduled"].includes(input.mode))
     fail("mode must be manual or scheduled");
   if (
     !Array.isArray(input.phases) ||
     input.phases.length < 1 ||
-    input.phases.length > 50
+    input.phases.length > 101
   )
     fail("provide 1–50 phases");
   if (input.timezone !== undefined) {
@@ -109,12 +130,16 @@ export function normalizeConfig(input) {
   const reserved = new Set(
     input.phases.map((p) => p?.id).filter((id) => id !== undefined),
   );
+  let phaseIndex = 0,
+    soundIndex = 0;
   const phases = input.phases.map((p, i) => {
-    if (!p || typeof p.label !== "string" || !p.label.trim())
+    const soundOnly = isSoundEntry(p);
+    const index = soundOnly ? soundIndex++ : phaseIndex++;
+    if (!soundOnly && (!p || typeof p.label !== "string" || !p.label.trim()))
       fail(`phase ${i + 1} needs a label`);
     let id = p.id;
     if (id === undefined) {
-      id = `phase-${i}`;
+      id = soundOnly ? `sound-${index}` : `phase-${index}`;
       while (reserved.has(id) || ids.has(id)) id += "-auto";
     }
     if (typeof id !== "string" || !id || ids.has(id))
@@ -135,14 +160,17 @@ export function normalizeConfig(input) {
       fail(
         "sound must be a same-origin root-relative media path, such as /local/sounds/example.mp3",
       );
+    if (soundOnly) return { id, sound: p.sound };
     return {
       ...p,
       id,
-      color: p.color ?? COLORS[i % COLORS.length],
+      color: p.color ?? COLORS[index % COLORS.length],
       milliseconds: parseDuration(p.duration),
     };
   });
-  if (phases.reduce((sum, p) => sum + p.milliseconds, 0) >= 86400000)
+  const events = phases.filter((p) => !isSoundEntry(p));
+  if (events.length < 1 || events.length > 50) fail("provide 1–50 phases");
+  if (events.reduce((sum, p) => sum + p.milliseconds, 0) >= 86400000)
     fail("sequence must be shorter than 24 hours");
   return {
     ...input,
@@ -172,7 +200,10 @@ function scheduledOccurrences(config, now, zone) {
   const date = Temporal.Instant.fromEpochMilliseconds(now)
     .toZonedDateTimeISO(timezone)
     .toPlainDate();
-  const duration = config.phases.reduce((sum, p) => sum + p.milliseconds, 0);
+  const duration = timedPhases(config).reduce(
+    (sum, p) => sum + p.milliseconds,
+    0,
+  );
   return [-1, 0, 1, 2].map((days) => {
     const anchor = date.add({ days }).toZonedDateTime({
       timeZone: timezone,
@@ -221,12 +252,20 @@ export function resolveSequence(config, now, zone, startedAt) {
   }
   if (startedAt == null) return null;
   let cursor = startedAt;
-  const phases = config.phases.map((p) => {
+  const phases = [],
+    cues = [];
+  for (const p of config.phases) {
+    if (isSoundEntry(p)) {
+      cues.push({ id: `sound:${p.id}`, sound: p.sound, end: cursor });
+      continue;
+    }
     const start = cursor;
     cursor += p.milliseconds;
-    return { ...p, start, end: cursor };
-  });
-  return { start: startedAt, end: cursor, phases };
+    phases.push({ ...p, start, end: cursor });
+    if (p.sound)
+      cues.push({ id: `phase:${p.id}`, sound: p.sound, end: cursor });
+  }
+  return { start: startedAt, end: cursor, phases, cues };
 }
 export function sequenceState(sequence, now) {
   if (!sequence) return { status: "idle", index: -1 };
