@@ -171,18 +171,22 @@ test("dragging auto-scrolls a nested editor across a shadow-root boundary", asyn
   await page.mouse.move(from.x + 10, from.y + 10);
   await page.mouse.down();
   await page.mouse.move(box.x + 80, box.y + box.height - 10, { steps: 10 });
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          window.editor.shadowRoot
-            .querySelectorAll(".sequence-entry")[3]
-            .getBoundingClientRect().bottom <
-          document.querySelector("#scroll-box").getBoundingClientRect().bottom -
-            45,
-      ),
-    )
-    .toBe(true);
+  // Observe every animation frame: coarse host polling can miss the target
+  // passing through the viewport and falsely accept an overscrolled row.
+  await page.waitForFunction(
+    () => {
+      const row = window.editor.shadowRoot
+        .querySelectorAll(".sequence-entry")[3]
+        .getBoundingClientRect();
+      const viewport = document
+        .querySelector("#scroll-box")
+        .getBoundingClientRect();
+      const point = row.top + row.height * 0.75;
+      return point > viewport.top + 40 && point < viewport.bottom - 45;
+    },
+    null,
+    { polling: "raf" },
+  );
   await page.mouse.move(box.x + 80, box.y + box.height / 2);
   // Pointer moves can be coalesced: wait until the editor has observed leaving
   // the scroll edge before measuring the final drop target.
