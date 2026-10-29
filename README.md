@@ -98,7 +98,7 @@ card:
 
 ## Visual editor and display options
 
-The native card editor supports title, mode, anchor, minimalist mode, phase labels/durations/colours, draggable phase/sound rows, adding/removing rows, and a read-only calculated-time preview. It follows Home Assistant's field colours and selected light/dark mode, including native form controls. The calculated preview includes sound cues in list order, showing each timestamp and full file path alongside timed phases. It uses offsets in manual mode and clock times in scheduled mode, updates after editing or reordering, and never starts a session or plays audio.
+The visual editor groups controls into **Card & timing**, **Display**, **Sequence**, optional **Translations**, and **Calculated sequence**. Boolean options use keyboard-accessible toggle switches; related sizes and padding share aligned rows, phase fields use compact label/duration/colour controls, and sound paths use the full available width. Translations start collapsed unless overrides already exist. The layout responds to the editor’s actual container width, including a narrow editor on a wide desktop. YAML configuration and defaults are unchanged. It follows Home Assistant's field colours and selected light/dark mode, including native form controls. The calculated preview includes sound cues in list order, showing each timestamp and full file path alongside timed phases. It uses offsets in manual mode and clock times in scheduled mode, updates after editing or reordering, and never starts a session or plays audio.
 
 Optional top-level settings:
 

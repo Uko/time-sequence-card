@@ -87,9 +87,8 @@ test("editor can set and clear the marker wording override", async ({
     );
     document.querySelector("main").replaceChildren(editor);
   });
-  const field = page.getByLabel(
-    "Now label (blank uses selected language)",
-  );
+  await page.getByText("Translations", { exact: true }).click();
+  const field = page.getByLabel("Now label (blank uses selected language)");
   await field.fill("Зараз");
   await field.dispatchEvent("change");
   expect(await page.evaluate(() => window.changed.translations.now)).toBe(

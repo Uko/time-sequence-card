@@ -6,6 +6,8 @@ import {
   sequenceWarnings,
 } from "./timing.js";
 
+import { editorStyles } from "./editor-styles.js";
+
 function el(tag, text = "") {
   const node = document.createElement(tag);
   node.textContent = text;
@@ -208,16 +210,29 @@ export class TimeSequenceCardEditor extends HTMLElement {
   }
   field(parent, label, value, change, type = "text") {
     const wrapper = el("label");
-    wrapper.append(el("span", label));
+    wrapper.className = type === "checkbox" ? "toggle-row" : "field";
+    const caption = label.replace(/^(?:Phase|Sound) \d+ (.)/, (_, first) =>
+      first.toUpperCase(),
+    );
+    wrapper.append(el("span", caption));
     const input = el("input");
     input.type = type;
-    if (type === "checkbox") input.checked = !!value;
-    else input.value = value ?? "";
+    if (type === "checkbox") {
+      input.checked = !!value;
+      input.setAttribute("role", "switch");
+      input.className = "switch-input";
+    } else input.value = value ?? "";
     input.setAttribute("aria-label", label);
     input.addEventListener("change", () =>
       change(type === "checkbox" ? input.checked : input.value),
     );
     wrapper.append(input);
+    if (type === "checkbox") {
+      const track = el("span");
+      track.className = "switch-track";
+      track.setAttribute("aria-hidden", "true");
+      wrapper.append(track);
+    }
     parent.append(wrapper);
     return input;
   }
@@ -225,18 +240,34 @@ export class TimeSequenceCardEditor extends HTMLElement {
     const root = this.shadowRoot;
     this.cancelDrag();
     root.replaceChildren();
-    const style = el(
-      "style",
-      `:host{display:block;color:var(--primary-text-color,#222);font:14px system-ui}*{box-sizing:border-box}label{display:flex;flex-direction:column;gap:5px;margin:8px 0;min-width:0}input,select,button{font:inherit;padding:9px;border:1px solid var(--input-idle-line-color,var(--divider-color,#8887));border-radius:6px;background:var(--input-fill-color,var(--ha-card-background,var(--card-background-color,#fff)));color:var(--input-ink-color,var(--primary-text-color,#222));min-width:0}input[type=checkbox]{align-self:start}fieldset{border:1px solid #8886;border-radius:8px;margin:14px 0;padding:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.actions{display:flex;gap:6px;flex-wrap:wrap}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}.drag-handle{cursor:grab;touch-action:none;user-select:none;min-width:44px;min-height:44px;margin-right:8px}.dragging{opacity:.5}.drop-before{box-shadow:0 -3px var(--primary-color,#148aa8)}.drop-after{box-shadow:0 3px var(--primary-color,#148aa8)}.sequence-warning{color:var(--warning-color,#b57900)}[hidden]{display:none!important}.error{color:var(--error-color,#d44)}.preview{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;background:#8881;padding:12px;border-radius:8px}.help{color:var(--secondary-text-color,#657080);line-height:1.5}@media(max-width:450px){.grid{grid-template-columns:1fr}}`,
-    );
+    const style = el("style", editorStyles);
     root.append(style);
-    root.append(
-      el(
-        "p",
-        "Fixed windows: later boundaries do not move when a phase overruns.",
-      ),
+    const section = (title, description = "") => {
+      const panel = el("section");
+      panel.className = "editor-section";
+      panel.setAttribute("role", "group");
+      panel.setAttribute("aria-label", title);
+      panel.append(el("h3", title));
+      if (description) {
+        const p = el("p", description);
+        p.className = "help";
+        panel.append(p);
+      }
+      root.append(panel);
+      return panel;
+    };
+    const grid = (parent) => {
+      const node = el("div");
+      node.className = "grid";
+      parent.append(node);
+      return node;
+    };
+    const timing = section(
+      "Card & timing",
+      "Choose a manual start or a daily start/finish time.",
     );
-    this.field(root, "Title", this.config.title, (v) => {
+    const timingGrid = grid(timing);
+    this.field(timingGrid, "Title", this.config.title, (v) => {
       this.config.title = v;
       this.emit();
     });
@@ -261,11 +292,11 @@ export class TimeSequenceCardEditor extends HTMLElement {
       this.render();
     });
     modeLabel.append(select);
-    root.append(modeLabel);
+    timingGrid.append(modeLabel);
     if (this.config.mode === "scheduled") {
       this.config.anchor ??= { at: "09:00", edge: "end" };
       this.field(
-        root,
+        timingGrid,
         "Anchor time",
         this.config.anchor.at,
         (v) => {
@@ -292,10 +323,10 @@ export class TimeSequenceCardEditor extends HTMLElement {
         this.emit();
       });
       label.append(edge);
-      root.append(label);
+      timingGrid.append(label);
     } else {
       this.field(
-        root,
+        timingGrid,
         "Session ID (optional reload recovery)",
         this.config.session_id,
         (v) => {
@@ -304,15 +335,15 @@ export class TimeSequenceCardEditor extends HTMLElement {
           this.emit();
         },
       );
-      root.append(
+      timing.append(
         el(
           "p",
           "A session ID saves timing in this browser and shares it across same-origin tabs, not across devices.",
         ),
       );
     }
-    this.field(
-      root,
+    const timeZone = this.field(
+      timingGrid,
       "Time zone (blank uses Home Assistant)",
       this.config.timezone,
       (v) => {
@@ -321,8 +352,16 @@ export class TimeSequenceCardEditor extends HTMLElement {
         this.emit();
       },
     );
+    if (this.config.mode === "scheduled")
+      timeZone.parentElement.classList.add("wide");
+    const displaySection = section(
+      "Display",
+      "Adjust the timeline without changing event timings.",
+    );
+    const toggles = el("div");
+    toggles.className = "switch-list";
     this.field(
-      root,
+      toggles,
       "Minimalist mode",
       this.config.minimalist ?? false,
       (v) => {
@@ -331,25 +370,37 @@ export class TimeSequenceCardEditor extends HTMLElement {
       },
       "checkbox",
     );
-    this.field(
-      root,
-      "Hide outside scheduled window",
-      this.config.hide_outside_window ?? false,
-      (value) => {
-        this.config.hide_outside_window = value;
-        this.emit();
-      },
-      "checkbox",
+    if (this.config.mode === "scheduled") {
+      this.field(
+        timing,
+        "Hide outside scheduled window",
+        this.config.hide_outside_window ?? false,
+        (value) => {
+          this.config.hide_outside_window = value;
+          this.emit();
+        },
+        "checkbox",
+      );
+    }
+    const translationsPanel = el("details");
+    translationsPanel.className = "editor-section translations-section";
+    translationsPanel.open =
+      this.translationsOpen ??
+      Boolean(this.config.translations || this.config.now_label);
+    translationsPanel.addEventListener("toggle", () => {
+      this.translationsOpen = translationsPanel.open;
+    });
+    translationsPanel.append(el("summary", "Translations"));
+    const translationsHelp = el(
+      "p",
+      "Optional language and wording overrides. Leave blank to follow Home Assistant.",
     );
+    translationsHelp.className = "help";
+    translationsPanel.append(translationsHelp);
     const translations = el("fieldset");
-    translations.append(el("legend", "Translations"));
-    translations.append(
-      el(
-        "p",
-        "Leave overrides blank for automatic translations. Language defaults to Home Assistant.",
-      ),
-    );
-    root.append(translations);
+    translations.className = "grid translations-fields";
+    translations.setAttribute("aria-label", "Translations");
+    translationsPanel.append(translations);
     for (const [key, label] of [
       ["language", "Language (blank uses Home Assistant)"],
       ["now", "Now label (blank uses selected language)"],
@@ -374,7 +425,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
     }
     const display = el("div");
     display.className = "grid";
-    root.append(display);
+    displaySection.append(display);
     this.field(
       display,
       "Timeline height",
@@ -386,7 +437,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
       "number",
     );
     this.field(
-      display,
+      toggles,
       "Show now marker",
       this.config.show_now ?? true,
       (v) => {
@@ -396,7 +447,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
       "checkbox",
     );
     this.field(
-      display,
+      toggles,
       "Show remaining time",
       this.config.show_remaining ?? true,
       (v) => {
@@ -439,10 +490,16 @@ export class TimeSequenceCardEditor extends HTMLElement {
     textScale.step = "0.1";
     textScale.title =
       "1 = default; 0.8 = 20% smaller; 1.2 = 20% larger. Event labels only.";
+    display.insertBefore(textScale.parentElement, display.children[1]);
+    displaySection.append(toggles);
+    const sequence = section(
+      "Sequence",
+      "Arrange timed phases and optional sound cues in playback order. Drag a handle or use Move buttons.",
+    );
     const warning = el("p");
     warning.className = "sequence-warning";
     warning.setAttribute("role", "status");
-    root.append(warning);
+    sequence.append(warning);
     let phaseNumber = 0,
       soundNumber = 0;
     for (const [i, p] of (this.config.phases ?? []).entries()) {
@@ -483,7 +540,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
       );
       group.append(legend);
       const grid = el("div");
-      grid.className = "grid";
+      grid.className = soundOnly ? "grid sound-fields" : "grid phase-fields";
       group.append(grid);
       if (soundOnly) {
         const input = this.field(
@@ -522,7 +579,9 @@ export class TimeSequenceCardEditor extends HTMLElement {
         ["up", -1],
         ["down", 1],
       ]) {
-        const button = el("button", `Move ${label}`);
+        const button = el("button", label === "up" ? "↑" : "↓");
+        button.className = "move";
+        button.title = `Move ${label}`;
         button.type = "button";
         button.setAttribute("aria-label", `Move ${kind} ${number} ${label}`);
         button.disabled =
@@ -532,6 +591,7 @@ export class TimeSequenceCardEditor extends HTMLElement {
       }
       const remove = el("button", "Remove");
       remove.type = "button";
+      remove.className = "remove";
       remove.setAttribute("aria-label", `Remove ${kind} ${number}`);
       remove.disabled = !soundOnly && timedPhases(this.config).length <= 1;
       remove.addEventListener("click", () => {
@@ -541,8 +601,11 @@ export class TimeSequenceCardEditor extends HTMLElement {
       });
       actions.append(remove);
       group.append(actions);
-      root.append(group);
+      sequence.append(group);
     }
+    const addActions = el("div");
+    addActions.className = "actions sequence-add";
+    sequence.append(addActions);
     for (const kind of ["phase", "sound"]) {
       const add = el("button", kind === "phase" ? "Add phase" : "Add sound");
       add.type = "button";
@@ -560,22 +623,26 @@ export class TimeSequenceCardEditor extends HTMLElement {
         this.render();
         this.emit();
       });
-      root.append(add);
+      addActions.append(add);
     }
-    root.append(
+    sequence.append(
       el(
         "p",
         "Durations use HH:MM:SS. Changing a duration recalculates boundaries around the anchor.",
       ),
     );
+    root.append(translationsPanel);
     const error = el("p");
     error.className = "error";
     error.setAttribute("role", "alert");
     root.append(error);
-    root.append(el("h3", "Calculated sequence"));
+    const calculated = section(
+      "Calculated sequence",
+      "Read-only timing preview. Sound cues do not play here.",
+    );
     const preview = el("div");
     preview.className = "preview";
-    root.append(preview);
+    calculated.append(preview);
     this.preview();
   }
   preview() {

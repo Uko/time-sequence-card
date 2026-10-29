@@ -9,8 +9,7 @@ const phases = [
 ];
 async function mount(page, config) {
   await page.goto("/test/fixture.html");
-  await page.clock.install({ time: new Date("2026-01-01T11:59:00Z") });
-  await page.clock.pauseAt(new Date("2026-01-01T11:59:00Z"));
+  await page.clock.setFixedTime(new Date("2026-01-01T11:59:00Z"));
   await page.evaluate(async (config) => {
     await customElements.whenDefined("time-sequence-card");
     window.audioCalls = 0;
