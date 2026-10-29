@@ -182,6 +182,16 @@ export class TimeSequenceCardEditor extends HTMLElement {
       },
       "checkbox",
     );
+    this.field(
+      root,
+      "Hide outside scheduled window",
+      this.config.hide_outside_window ?? false,
+      (value) => {
+        this.config.hide_outside_window = value;
+        this.emit();
+      },
+      "checkbox",
+    );
     const translations = el("fieldset");
     translations.append(el("legend", "Translations"));
     translations.append(

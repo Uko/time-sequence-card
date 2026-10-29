@@ -106,6 +106,7 @@ Optional top-level settings:
 - `minimalist`: focus on the timeline and a full-width phase name above it; hides the title, mode badge, schedule summary and countdown row. Default `false`. Manual Start/Reset remain available as compact controls.
 - `height`: timeline area height (bar plus time labels), 80–400 pixels; defaults to 120, or 80 with `minimalist: true`. The bar fills the available area rather than being capped at a fixed height.
 - `event_text_scale`: scale only the text printed inside event bars, from `0.5` to `3`; default `1`. For example, `event_text_scale: 1.2` makes event labels 20% larger, while `0.8` makes them 20% smaller to help fit longer names. Applies on top of the existing responsive text size, in both display modes. Does not change the current-action heading, clock/boundary labels, details, phase widths or manual session. Available in the visual editor; clearing the field restores the default. Large text still truncates rather than spilling into adjacent events.
+- `hide_outside_window`: automatically hide scheduled cards outside their timeline window, including before/after padding; default `false`. Ignored in manual mode. Editor previews remain visible. See automatic scheduled visibility below.
 - `show_now`: show the current-time marker during the sequence and any configured timeline padding; default `true`.
 - `padding_before` / `padding_after`: extra visible time before the first phase and after the final phase, in minutes; both default to `0`. Accept finite numbers from 0 to 1440, including fractions. Available in the visual editor. These are display-only margins, not phases or delays.
 - `translations`: optional language and text overrides, described below and grouped separately in the visual editor.
@@ -114,6 +115,20 @@ Optional top-level settings:
 - `session_id`: manual browser-local persistence, described above.
 
 Each phase requires `label` and `duration`. Optional `id` must be unique, and `color` uses `#RRGGBB`. Legacy `icon` fields are ignored; removing them from existing YAML is optional. The visual editor assigns stable IDs before editing or reordering. YAML without IDs uses collision-free positional IDs; supply explicit IDs when reordering phases by hand so phase identity remains unambiguous. No arbitrary JavaScript, HTML, external images or CSS values are executed from configuration.
+
+### Automatic scheduled visibility
+
+```yaml
+hide_outside_window: true
+padding_before: 5
+padding_after: 5
+```
+
+For `mode: scheduled`, show the card from the first phase's start minus `padding_before` until the final phase's end plus `padding_after`. The start is inclusive; the end is exclusive. This uses the same time-zone-aware window as the timeline, including finish anchors, midnight-spanning sequences and daylight-saving changes. Both padding values default to zero. The setting does not hide manual cards, change event times or add weekday scheduling.
+
+Enable **Hide outside scheduled window** in the visual editor, or add the YAML flag. It defaults to `false`, preserving the idle countdown when not enabled. Native HA editor previews stay visible so the card remains editable outside its schedule. Existing HA weekday/holiday/visibility conditions still apply independently; this feature cannot override them.
+
+The connected card's own clock checks visibility once per second and refreshes on HA updates or when the page becomes visible again, so a hidden card can reappear tomorrow without an entity update. It reports visibility changes to the native HA wrapper and remains connected while hidden, allowing standard HA layouts to collapse the wrapper instead of displaying an empty card. Third-party layouts with explicitly reserved slots may retain their own spacing. Invalid runtime time-zone resolution leaves a visible warning rather than hiding an error.
 
 ### Timeline padding
 

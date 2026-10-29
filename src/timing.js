@@ -74,7 +74,12 @@ export function normalizeConfig(input) {
       !/^[a-zA-Z0-9_-]{1,80}$/.test(input.session_id))
   )
     fail("session_id must be 1–80 letters, digits, underscores or hyphens");
-  for (const key of ["show_remaining", "show_now", "minimalist"])
+  for (const key of [
+    "show_remaining",
+    "show_now",
+    "minimalist",
+    "hide_outside_window",
+  ])
     if (input[key] !== undefined && typeof input[key] !== "boolean")
       fail(`${key} must be boolean`);
   if (
@@ -136,6 +141,7 @@ export function normalizeConfig(input) {
     minimalist: input.minimalist ?? false,
     event_text_scale: input.event_text_scale ?? 1,
     show_now: input.show_now ?? true,
+    hide_outside_window: input.hide_outside_window ?? false,
     padding_before: input.padding_before ?? 0,
     padding_after: input.padding_after ?? 0,
     show_remaining: input.show_remaining ?? true,
@@ -177,6 +183,12 @@ export function timelineWindow(config, sequence) {
   const start = sequence.start - (config.padding_before ?? 0) * 60000;
   const end = sequence.end + (config.padding_after ?? 0) * 60000;
   return { start, end, duration: end - start };
+}
+export function isSequenceVisible(config, sequence, now) {
+  if (!config.hide_outside_window || config.mode !== "scheduled" || !sequence)
+    return true;
+  const { start, end } = timelineWindow(config, sequence);
+  return now >= start && now < end;
 }
 export function resolveSequence(config, now, zone, startedAt) {
   if (config.mode === "scheduled") {

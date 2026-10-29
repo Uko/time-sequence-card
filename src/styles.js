@@ -1,6 +1,6 @@
 export const styles = `
 :host{display:block;position:relative;container-type:inline-size;color:var(--primary-text-color,#202a35);font-family:var(--paper-font-body1_-_font-family,system-ui);font-variant-numeric:tabular-nums}
-:host([details-open]){z-index:10}*{box-sizing:border-box}[hidden]{display:none!important}
+:host([hidden]){display:none!important}:host([details-open]){z-index:10}*{box-sizing:border-box}[hidden]{display:none!important}
 ha-card{display:block;padding:16px;border-radius:var(--ha-card-border-radius,16px);background:var(--ha-card-background,var(--card-background-color,#fff));border:1px solid var(--ha-card-border-color,rgba(127,127,127,.18));overflow:visible}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px}h2{font-size:18px;line-height:1.3;margin:0;font-weight:600;overflow-wrap:anywhere}.mode{font-size:10px;letter-spacing:.16em;color:var(--secondary-text-color,#607080);flex-shrink:0}
 .top-row{display:flex;align-items:flex-start;gap:12px;margin-top:12px}.status{display:flex;flex:1;min-width:0;align-items:baseline;justify-content:space-between;gap:6px 12px;flex-wrap:wrap;min-height:26px}.status-label{font-size:21px;font-weight:650;overflow-wrap:anywhere;min-width:0;max-width:100%}.remaining{font-size:13px;color:var(--secondary-text-color,#607080)}.remaining:empty{display:none}.window-label{font-size:11px;margin-top:3px;color:var(--secondary-text-color,#607080)}

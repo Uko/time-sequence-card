@@ -4,6 +4,7 @@ import {
   sequenceState,
   nextScheduledStart,
   timelineWindow,
+  isSequenceVisible,
 } from "./timing.js";
 import { styles } from "./styles.js";
 import {
@@ -38,6 +39,9 @@ export class TimeSequenceCard extends HTMLElement {
     /** @type {any} */ this._hass = null;
     /** @type {number|null} */ this.startedAt = null;
     this.timer = 0;
+    this._preview = false;
+    // HA must keep our clock connected while its wrapper is hidden.
+    this.connectedWhileHidden = true;
     this.storageWarning = "";
     this.inspectedIndex = -1;
     this.detailPinned = false;
@@ -75,7 +79,31 @@ export class TimeSequenceCard extends HTMLElement {
   static async getConfigElement() {
     return document.createElement("time-sequence-card-editor");
   }
+  set preview(value) {
+    this._preview = value === true;
+    this.tick();
+  }
+  get preview() {
+    return this._preview;
+  }
+  setWindowVisibility(visible) {
+    if (this.hidden === !visible) return;
+    this.hidden = !visible;
+    if (!visible) {
+      this.inspectedIndex = -1;
+      this.detailPinned = false;
+      this.removeAttribute("details-open");
+    }
+    this.dispatchEvent(
+      new CustomEvent("card-visibility-changed", {
+        detail: { value: visible },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
   getCardSize() {
+    if (this.hidden) return 0;
     return this.config?.minimalist ? 2 : 4;
   }
   getGridOptions() {
@@ -438,8 +466,13 @@ export class TimeSequenceCard extends HTMLElement {
       sequence = resolveSequence(this.config, now, zone, this.startedAt);
     } catch {
       warning.textContent = "Unable to resolve time zone or scheduled time.";
+      this.setWindowVisibility(true);
       return;
     }
+    this.setWindowVisibility(
+      this.preview || isSequenceVisible(this.config, sequence, now),
+    );
+    if (this.hidden) return;
     warning.textContent = this.storageWarning;
     const state = sequenceState(sequence, now);
     // An idle manual timeline previews offsets without inventing a start time.
