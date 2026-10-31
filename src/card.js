@@ -322,6 +322,8 @@ export class TimeSequenceCard extends HTMLElement {
     }
     const cursor = element("div", "cursor");
     track.append(cursor);
+    // Clip the halo to the real phase range, including at padded endpoints.
+    track.append(element("div", "cursor-shadow"));
     const axis = element("div", "axis");
     const nowLabel = element("span", "now-label");
     nowLabel.append(
@@ -586,6 +588,16 @@ export class TimeSequenceCard extends HTMLElement {
       now < viewport.start ||
       now >= viewport.end;
     cursor.style.left = `${Math.min(100, Math.max(0, progress))}%`;
+    const cursorShadow = /** @type {HTMLElement} */ (
+      root.querySelector(".cursor-shadow")
+    );
+    cursorShadow.hidden = cursor.hidden || state.status !== "active";
+    cursorShadow.style.left = `${((display.start - viewport.start) / viewport.duration) * 100}%`;
+    cursorShadow.style.width = `${((display.end - display.start) / viewport.duration) * 100}%`;
+    cursorShadow.style.setProperty(
+      "--cursor-shadow-position",
+      `${((now - display.start) / (display.end - display.start)) * 100}%`,
+    );
     root.querySelectorAll(".band").forEach((band, i) => {
       band.classList.toggle("active", state.index === i);
       band.classList.toggle(

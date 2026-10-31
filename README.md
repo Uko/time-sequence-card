@@ -216,7 +216,7 @@ For a compact scheduled widget, add this at the top level:
 minimalist: true
 ```
 
-Timing, phase colours and interactions are unchanged by minimalist mode. Completed phases are muted. Home Assistant theme colours are used when available.
+Timing, phase colours and interactions are unchanged by minimalist mode. Completed phases are muted. The NOW cursor follows Home Assistant's primary text colour and has a soft card-background-coloured shadow at 50% opacity (3px blur, 1px spread). The shadow uses the card background override when present, otherwise the theme card background. It is clipped to the event bars, including their rounded endpoints; the short line extensions and neutral timeline padding stay unshadowed. The active outline is a single-colour stroke following the theme foreground (light in dark mode, dark in light mode), without an additional inner edge. Configured phase colours remain unchanged; no extra settings are required.
 
 ## Dates, clocks and limitations
 
