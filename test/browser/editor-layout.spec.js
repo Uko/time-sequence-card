@@ -1,4 +1,22 @@
 import { test, expect } from "@playwright/test";
+test("HA config echo preserves editor position and input focus", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 500 });
+  await mount(page);
+  await page.evaluate(() => {
+    window.editor.addEventListener("config-changed", (event) => {
+      window.editor.setConfig(event.detail.config);
+    });
+  });
+  const field = page.getByLabel("Event text scale");
+  await field.scrollIntoViewIfNeeded();
+  await field.focus();
+  const before = await page.evaluate(() => window.scrollY);
+  await field.fill("0.8");
+  await field.dispatchEvent("change");
+  await expect(field).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  expect(await page.evaluate(() => window.changed.event_text_scale)).toBe(0.8);
+});
 async function mount(page, extra = {}) {
   await page.goto("/test/fixture.html");
   await page.evaluate(async (extra) => {

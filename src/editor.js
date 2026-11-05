@@ -32,6 +32,10 @@ export class TimeSequenceCardEditor extends HTMLElement {
     this.preview();
   }
   setConfig(input) {
+    // Home Assistant echoes our own config-changed event back to setConfig.
+    // Rebuilding the editor for that echo removes the focused control and
+    // collapses the pane temporarily, which can also reset its scroll position.
+    if (this.config && JSON.stringify(input) === JSON.stringify(this.config)) return;
     this.config = structuredClone(input);
     if (Array.isArray(this.config.phases))
       this.config.phases = this.config.phases.flatMap((p) => {
