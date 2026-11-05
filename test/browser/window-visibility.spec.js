@@ -108,6 +108,16 @@ test("preview and opt-out remain visible; manual cards never auto-hide", async (
   await page.clock.runFor(1000);
   await expect(page.locator("time-sequence-card")).toBeVisible();
 });
+test("independent visibility margins keep the card visible beyond the timeline", async ({ page }) => {
+  await mount(page);
+  await page.evaluate(() => window.card.setConfig({ ...window.card.config,
+    visibility_before: 15, visibility_after: 10 }));
+  await expect(page.locator("time-sequence-card")).toBeVisible();
+  await expect(page.locator(".now-label")).toBeHidden();
+  await page.clock.setSystemTime(new Date("2026-01-01T12:19:59Z"));
+  await page.clock.runFor(1000);
+  await expect(page.locator("time-sequence-card")).toBeHidden();
+});
 test("wake from suspension refreshes visibility, hiding closes details and resolution errors stay visible", async ({
   page,
 }) => {
@@ -161,4 +171,13 @@ test("editor exposes the opt-in scheduled visibility checkbox", async ({
   expect(await page.evaluate(() => window.changed.hide_outside_window)).toBe(
     true,
   );
+  for (const [label, key, value] of [["Visibility before (minutes)", "visibility_before", "15"], ["Visibility after (minutes)", "visibility_after", "10"]]) {
+    const field = page.getByLabel(label);
+    await field.fill(value);
+    await field.dispatchEvent("change");
+    expect(await page.evaluate((key) => window.changed[key], key)).toBe(Number(value));
+    await field.fill("");
+    await field.dispatchEvent("change");
+    expect(await page.evaluate((key) => key in window.changed, key)).toBe(false);
+  }
 });

@@ -108,7 +108,7 @@ export function normalizeConfig(input) {
     (!Number.isFinite(input.height) || input.height < 80 || input.height > 400)
   )
     fail("height must be 80–400");
-  for (const key of ["padding_before", "padding_after"]) {
+  for (const key of ["padding_before", "padding_after", "visibility_before", "visibility_after"]) {
     if (
       input[key] !== undefined &&
       (typeof input[key] !== "number" ||
@@ -225,11 +225,14 @@ export function timelineWindow(config, sequence) {
   const end = sequence.end + (config.padding_after ?? 0) * 60000;
   return { start, end, duration: end - start };
 }
-export function isSequenceVisible(config, sequence, now) {
+export function isSequenceVisible(config, sequence, now, zone) {
   if (!config.hide_outside_window || config.mode !== "scheduled" || !sequence)
     return true;
-  const { start, end } = timelineWindow(config, sequence);
-  return now >= start && now < end;
+  const before = config.visibility_before ?? config.padding_before ?? 0;
+  const after = config.visibility_after ?? config.padding_after ?? 0;
+  return scheduledOccurrences(config, now, zone).some(
+    (s) => now >= s.start - before * 60000 && now < s.end + after * 60000,
+  );
 }
 export function resolveSequence(config, now, zone, startedAt) {
   if (config.mode === "scheduled") {
@@ -244,9 +247,19 @@ export function resolveSequence(config, now, zone, startedAt) {
           Math.max(a.start - now, now - a.end, 0) -
             Math.max(b.start - now, now - b.end, 0) || b.start - a.start,
       );
+    const visibilityMatches = config.hide_outside_window
+      ? occurrences.filter((s) =>
+          now >= s.start - (config.visibility_before ?? config.padding_before ?? 0) * 60000 &&
+          now < s.end + (config.visibility_after ?? config.padding_after ?? 0) * 60000,
+        ).sort((a, b) =>
+          Math.max(a.start - now, now - a.end, 0) -
+            Math.max(b.start - now, now - b.end, 0) || b.start - a.start,
+        )
+      : [];
     startedAt = (
       [...occurrences].reverse().find((s) => now >= s.start && now < s.end) ??
       padded[0] ??
+      visibilityMatches[0] ??
       occurrences[1]
     ).start;
   }

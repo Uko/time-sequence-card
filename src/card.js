@@ -499,7 +499,7 @@ export class TimeSequenceCard extends HTMLElement {
     }
     // Unhide before start cues; defer hiding until after final cues.
     const visible =
-      this.preview || isSequenceVisible(this.config, sequence, now);
+      this.preview || isSequenceVisible(this.config, sequence, now, zone);
     if (visible) this.setWindowVisibility(true);
     this.soundPlayer.update(
       sequence,

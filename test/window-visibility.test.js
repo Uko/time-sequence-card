@@ -13,8 +13,23 @@ const base = {
 function visible(input, at, zone = "UTC") {
   const c = normalizeConfig(input),
     now = Date.parse(at);
-  return isSequenceVisible(c, resolveSequence(c, now, zone, null), now);
+  return isSequenceVisible(c, resolveSequence(c, now, zone, null), now, zone);
 }
+test("independent visibility margins do not depend on timeline padding or the selected occurrence", () => {
+  const c = { ...base, hide_outside_window: true, padding_before: 5, padding_after: 5,
+    visibility_before: 15, visibility_after: 10 };
+  for (const [at, expected] of [["11:44:59", false], ["11:45:00", true],
+    ["12:19:59", true], ["12:20:00", false]])
+    assert.equal(visible(c, `2026-01-01T${at}Z`), expected, at);
+  const midnight = { ...c, anchor: { at: "00:02", edge: "start" } };
+  assert.equal(visible(midnight, "2026-01-01T23:50:00Z"), true);
+  const mc = normalizeConfig(midnight);
+  assert.equal(resolveSequence(mc, Date.parse("2026-01-01T23:50:00Z"), "UTC", null).start,
+    Date.parse("2026-01-02T00:02:00Z"));
+  for (const key of ["visibility_before", "visibility_after"])
+    for (const value of [-1, 1441, "15", null])
+      assert.throws(() => normalizeConfig({ ...c, [key]: value }), new RegExp(key));
+});
 test("window visibility is strictly opt-in and manual mode always stays visible", () => {
   assert.equal(normalizeConfig(base).hide_outside_window, false);
   for (const value of ["true", 1, null, {}])

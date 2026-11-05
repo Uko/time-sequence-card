@@ -385,6 +385,21 @@ export class TimeSequenceCardEditor extends HTMLElement {
         },
         "checkbox",
       );
+      const visibilityGrid = grid(timing);
+      for (const [key, label] of [
+        ["visibility_before", "Visibility before (minutes)"],
+        ["visibility_after", "Visibility after (minutes)"],
+      ]) {
+        const input = this.field(visibilityGrid, label, this.config[key] ?? "", (value) => {
+          if (value === "") delete this.config[key];
+          else this.config[key] = Number(value);
+          this.emit();
+        }, "number");
+        input.min = "0";
+        input.max = "1440";
+        input.step = "any";
+        input.placeholder = "Use timeline padding";
+      }
     }
     const translationsPanel = el("details");
     translationsPanel.className = "editor-section translations-section";

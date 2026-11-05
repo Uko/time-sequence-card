@@ -109,6 +109,7 @@ Optional top-level settings:
 - `hide_outside_window`: automatically hide scheduled cards outside their timeline window, including before/after padding; default `false`. Ignored in manual mode. Editor previews remain visible. See automatic scheduled visibility below.
 - `show_now`: show the current-time marker during the sequence and any configured timeline padding; default `true`.
 - `padding_before` / `padding_after`: extra visible time before the first phase and after the final phase, in minutes; both default to `0`. Accept finite numbers from 0 to 1440, including fractions. Available in the visual editor. These are display-only margins, not phases or delays.
+- `visibility_before` / `visibility_after`: optional independent auto-hide margins in minutes before the first phase and after the final phase. Each defaults to its corresponding timeline padding if omitted; set to `0` to override padding explicitly. Accept finite numbers from 0 to 1440, including fractions. These do not change the timeline or cursor range.
 - `translations`: optional language and text overrides, described below and grouped separately in the visual editor.
 - `now_label`: legacy override for the current-time word; still supported. Prefer `translations.now` for new configurations.
 - `show_remaining`: show active-phase countdowns; default `true`. The idle next-start countdown remains part of the status in both display modes.
@@ -161,7 +162,7 @@ padding_before: 5
 padding_after: 5
 ```
 
-For `mode: scheduled`, show the card from the first phase's start minus `padding_before` until the final phase's end plus `padding_after`. The start is inclusive; the end is exclusive. This uses the same time-zone-aware window as the timeline, including finish anchors, midnight-spanning sequences and daylight-saving changes. Both padding values default to zero. The setting does not hide manual cards, change event times or add weekday scheduling.
+For `mode: scheduled`, show the card from the first phase's start minus `visibility_before` until the final phase's end plus `visibility_after`. When either value is omitted, that side uses its matching timeline padding, preserving existing behavior. The start is inclusive; the end is exclusive. These are minutes measured from the actual phase boundaries, not added to timeline padding. The time-zone-aware window supports finish anchors, midnight-spanning sequences and daylight-saving changes. The setting does not hide manual cards, change event times or add weekday scheduling.
 
 Enable **Hide outside scheduled window** in the visual editor, or add the YAML flag. It defaults to `false`, preserving the idle countdown when not enabled. Native HA editor previews stay visible so the card remains editable outside its schedule. Existing HA weekday/holiday/visibility conditions still apply independently; this feature cannot override them.
 
