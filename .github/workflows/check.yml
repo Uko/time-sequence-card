@@ -7,9 +7,14 @@ env:
   CI: "true"
 jobs:
   verify:
-    runs-on: node24
+    runs-on: ${{ github.server_url == 'https://github.com' && 'ubuntu-latest' || 'node24' }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        if: github.server_url == 'https://github.com'
+        with:
+          node-version: 24
+          cache: npm
       - run: npm ci --include=dev
       - run: npx playwright install --with-deps chromium
       - run: npm run verify
