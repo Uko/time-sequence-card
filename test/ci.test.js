@@ -28,4 +28,6 @@ test("Forgejo workflow explicitly enables bounded CI and omits ignored permissio
   );
   assert.match(workflow, /CI: ["']?true["']?/);
   assert.doesNotMatch(workflow, /^\s*permissions:/m);
+  // Playwright 1.56 cannot install on Ubuntu 26.04 (currently ubuntu-latest).
+  assert.match(workflow, /runs-on:.*'ubuntu-24\.04'.*'node24'/);
 });
