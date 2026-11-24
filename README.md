@@ -27,12 +27,6 @@ A Home Assistant dashboard card for routines and timed activities. Define a sequ
 2. In HACS, download **Time Sequence Card**.
 3. Reload the browser if the card is not immediately available in the card picker.
 
-Until the card is listed in the default HACS store, add this repository as a **Dashboard** custom repository in HACS:
-
-```text
-https://github.com/Uko/time-sequence-card
-```
-
 ### Manual installation
 
 1. Download `dist/time-sequence-card.js` from the release or repository.
