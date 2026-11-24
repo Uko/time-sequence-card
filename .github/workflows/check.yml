@@ -17,5 +17,7 @@ jobs:
           cache: npm
       - run: npm ci --include=dev
       - run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000"
       - run: npm run verify
       - run: git diff --exit-code -- dist/

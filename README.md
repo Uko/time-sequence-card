@@ -1,4 +1,6 @@
-# Time Sequence Card
+# Time Sequence Card [![Tests](https://github.com/Uko/time-sequence-card/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/Uko/time-sequence-card/actions/workflows/check.yml) [![HACS validation](https://github.com/Uko/time-sequence-card/actions/workflows/validate.yaml/badge.svg?branch=main)](https://github.com/Uko/time-sequence-card/actions/workflows/validate.yaml)
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W1681LC)
 
 A Home Assistant dashboard card for routines and timed activities. Define a sequence of phases once and see what is happening now, what comes next, and when each phase ends. Start a presentation manually, or anchor a daily routine to a start time or deadline.
 
